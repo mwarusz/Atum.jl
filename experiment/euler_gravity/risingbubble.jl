@@ -58,7 +58,7 @@ function run(A, FT, N, K; outputvtk=true)
   vz = range(FT(0), stop=FT(1e3), length=K+1)
   grid = brickgrid(cell, (vx, vz); periodic = (true, false))
 
-  dg = DGSEM(; law, cell, grid, numericalflux = RusanovFlux())
+  dg = DGSEM(; law, cell, grid, numericalflux = RoeFlux())
 
   cfl = FT(1 // 3)
   dt = cfl * step(vz) / N / 330
