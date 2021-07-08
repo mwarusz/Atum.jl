@@ -37,24 +37,51 @@ function (dg::ESDGSEM)(dq, q, time)
 
   comp_stream = Event(device)
 
-  workgroup = ntuple(i -> i <= min(2, dim) ? Nq : 1, 3)
-  ndrange = (length(grid) * workgroup[1], Base.tail(workgroup)...)
-  comp_stream = esvolumeterm!(device, workgroup)(
-    dg.law,
-    dq,
-    q,
-    derivatives_1d(cell)[1],
-    dg.volume_numericalflux,
-    metrics(grid),
-    dg.MJ,
-    dg.MJI,
-    points(grid),
-    Val(dim),
-    Val(Nq),
-    Val(numberofstates(dg.law));
-    ndrange,
-    dependencies = comp_stream
-  )
+  kernel_type = :per_dir
+  if kernel_type == :naive
+    workgroup = ntuple(i -> i <= min(2, dim) ? Nq : 1, 3)
+    ndrange = (length(grid) * workgroup[1], Base.tail(workgroup)...)
+    comp_stream = esvolumeterm!(device, workgroup)(
+      dg.law,
+      dq,
+      q,
+      derivatives_1d(cell)[1],
+      dg.volume_numericalflux,
+      metrics(grid),
+      dg.MJ,
+      dg.MJI,
+      points(grid),
+      Val(dim),
+      Val(Nq),
+      Val(numberofstates(dg.law));
+      ndrange,
+      dependencies = comp_stream
+    )
+  elseif kernel_type == :per_dir
+    workgroup = ntuple(i -> i <= dim ? Nq : 1, 3)
+    ndrange = (length(grid) * workgroup[1], Base.tail(workgroup)...)
+    for dir in 1:dim
+      comp_stream = esvolumeterm_dir!(device, workgroup)(
+        dg.law,
+        dq,
+        q,
+        derivatives_1d(cell)[1],
+        dg.volume_numericalflux,
+        metrics(grid),
+        dg.MJ,
+        dg.MJI,
+        points(grid),
+        Val(dir),
+        Val(dim),
+        Val(Nq),
+        Val(numberofstates(dg.law));
+        ndrange,
+        dependencies = comp_stream
+      )
+    end
+  else
+    error("Unknown kernel type $kernel_type")
+  end
 
   Nfp = Nq ^ (dim  - 1)
   workgroup_face = (Nfp,)
@@ -230,5 +257,96 @@ end
       ijk = i + Nq * (j - 1 + Nq * (k - 1))
       dq[ijk, e] += dqijk
     end
+  end
+end
+
+@kernel function esvolumeterm_dir!(law,
+                                   dq,
+                                   q,
+                                   D,
+                                   volume_numericalflux,
+                                   metrics,
+                                   MJ,
+                                   MJI,
+                                   points,
+                                   ::Val{dir},
+                                   ::Val{dim},
+                                   ::Val{Nq},
+                                   ::Val{Ns}) where {dir, dim, Nq, Ns}
+  @uniform begin
+    FT = eltype(law)
+    Nq1 = Nq
+    Nq2 = dim > 1 ? Nq : 1
+    Nq3 = dim > 2 ? Nq : 1
+
+    q2 = MVector{Ns, FT}(undef)
+    x⃗2 = MVector{dim, FT}(undef)
+  end
+
+  dqijk = @private FT (Ns,)
+
+  q1 = @private FT (Ns,)
+  x⃗1 = @private FT (dim,)
+
+  l_g = @localmem FT (Nq ^ 3, 3)
+
+  e = @index(Group, Linear)
+  i, j, k = @index(Local, NTuple)
+
+  @inbounds begin
+    ijk = i + Nq * (j - 1 + Nq * (k - 1))
+
+    MJijk = MJ[ijk, e]
+    @unroll for d in 1:dim
+      l_g[ijk, d] = MJijk * metrics[ijk, e].g[dir, d]
+    end
+
+    fill!(dqijk, -zero(FT))
+
+    @unroll for s in 1:Ns
+      q1[s] = q[ijk, e][s]
+    end
+    @unroll for d in 1:dim
+      x⃗1[d] = points[ijk, e][d]
+    end
+
+    source!(law, dqijk, q1, x⃗1)
+
+    @synchronize
+
+    ijk = i + Nq * (j - 1 + Nq * (k - 1))
+
+    MJIijk = MJI[ijk, e]
+    @unroll for n in 1:Nq
+      if dir == 1
+        id = i
+        ild = n + Nq * ((j - 1) + Nq * (k - 1))
+      elseif dir == 2
+        id = j
+        ild = i + Nq * ((n - 1) + Nq * (k - 1))
+      elseif dir == 3
+        id = k
+        ild = i + Nq * ((j - 1) + Nq * (n - 1))
+      end
+
+      @unroll for s in 1:Ns
+        q2[s] = q[ild, e][s]
+      end
+      @unroll for d in 1:dim
+        x⃗2[d] = points[ild, e][d]
+      end
+
+      f = twopointflux(volume_numericalflux, law, q1, x⃗1, q2, x⃗2)
+      @unroll for s in 1:Ns
+        Ddn = MJIijk * D[id, n]
+        Dnd = MJIijk * D[n, id]
+        @unroll for d in 1:dim
+          dqijk[s] -= Ddn * l_g[ijk, d] * f[d, s]
+          dqijk[s] += f[d, s] * l_g[ild, d] * Dnd
+        end
+      end
+    end
+
+    dq[ijk, e] += dqijk
   end
 end
