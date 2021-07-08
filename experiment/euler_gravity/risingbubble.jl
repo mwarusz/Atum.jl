@@ -12,7 +12,7 @@ function boundarystate(law::EulerGravityLaw, n⃗, x⃗, q⁻, _)
   SVector(ρ⁺, ρu⃗⁺..., ρe⁺)
 end
 
-function risingbubble(law, x⃗; add_perturbation=true)
+function risingbubble(law, x⃗, add_perturbation=true)
   FT = eltype(law)
   x, z = x⃗
 
@@ -27,7 +27,7 @@ function risingbubble(law, x⃗; add_perturbation=true)
   xc = FT(500)
   zc = FT(350)
   rc = FT(250)
-  δθc = FT(1 // 2)
+  δθc = FT(1 / 2)
 
   r = sqrt((x - xc) ^ 2 + (z - zc) ^ 2)
   δθ = r <= rc ? δθc : zero(FT)
@@ -65,7 +65,7 @@ function run(A, FT, N, K; outputvtk=true)
   timeend = FT(500)
  
   q = risingbubble.(Ref(law), points(grid))
-  qref = risingbubble.(Ref(law), points(grid); add_perturbation=false)
+  qref = risingbubble.(Ref(law), points(grid), false)
 
   if outputvtk
     vtkdir = joinpath("output", "euler_gravity", "risingbubble")

@@ -98,7 +98,7 @@ module Euler
     w4 = abs(uₙ) * ρ
 
     fp_ρ = (w1 + w2 + w3) / 2
-    fp_ρu = (w1 * (u⃗ - c * n⃗) +
+    fp_ρu⃗ = (w1 * (u⃗ - c * n⃗) +
              w2 * (u⃗ + c * n⃗) +
              w3 * u⃗ +
              w4 * (Δu⃗ - Δuₙ * n⃗)) / 2
@@ -107,7 +107,7 @@ module Euler
              w3 * u⃗' * u⃗ / 2 +
              w4 * (u⃗' * Δu⃗ - uₙ * Δuₙ)) / 2
 
-    (f⁻ + f⁺)' * n⃗ / 2 - vcat(fp_ρ, fp_ρu, fp_ρe)
+    (f⁻ + f⁺)' * n⃗ / 2 - SVector(fp_ρ, fp_ρu⃗..., fp_ρe)
   end
 
   function Atum.twopointflux(::Atum.EntropyConservativeFlux,

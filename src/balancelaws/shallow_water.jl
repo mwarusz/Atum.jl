@@ -86,10 +86,10 @@ module ShallowWater
     w5 = abs(uₙ) * (Δρθ - θ * Δp * c⁻²)
 
     fp_ρ = (w1 + w2 + w3) / 2
-    fp_ρu = (w1 * (u⃗ - c * n⃗) + w2 * (u⃗ + c * n⃗) + w3 * u⃗ + w4 * (Δu⃗ - Δuₙ * n⃗)) / 2
+    fp_ρu⃗ = (w1 * (u⃗ - c * n⃗) + w2 * (u⃗ + c * n⃗) + w3 * u⃗ + w4 * (Δu⃗ - Δuₙ * n⃗)) / 2
     fp_ρθ = ((w1 + w2) * θ + w5) / 2
 
-    (f⁻ + f⁺)' * n⃗ / 2 - vcat(fp_ρ, fp_ρu, fp_ρθ)
+    (f⁻ + f⁺)' * n⃗ / 2 - SVector(fp_ρ, fp_ρu⃗..., fp_ρθ)
   end
 
   function Atum.twopointflux(::Atum.EntropyConservativeFlux,
