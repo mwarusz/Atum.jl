@@ -33,6 +33,7 @@ function (dg::ESDGSEM)(dq, q, time)
   dim = ndims(cell)
   Nq = size(cell)[1]
   @assert all(size(cell) .== Nq)
+  @assert(length(eltype(q)) == numberofstates(dg.law))
 
   comp_stream = Event(device)
 

@@ -31,7 +31,9 @@ function (dg::DGSEM)(dq, q, time)
   device = Bennu.device(arraytype(cell))
   dim = ndims(cell)
   Nq = size(cell)[1]
+
   @assert all(size(cell) .== Nq)
+  @assert(length(eltype(q)) == numberofstates(dg.law))
 
   comp_stream = Event(device)
 
