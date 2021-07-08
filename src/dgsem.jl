@@ -130,6 +130,7 @@ end
 
     fill!(dqijk, -zero(FT))
     source!(law, dqijk, qijk, x⃗ijk)
+    nonconservative_term!(law, dqijk, qijk, x⃗ijk)
 
     @synchronize
 

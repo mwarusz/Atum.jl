@@ -168,6 +168,8 @@ end
         x⃗1[d] = l_x⃗[i, j, d]
       end
 
+      source!(law, dqijk, q1, x⃗1)
+
       MJIijk = 1 / pencil_MJ[k]
       @unroll for n in 1:Nq
         @unroll for s in 1:Ns

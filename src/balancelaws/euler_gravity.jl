@@ -2,7 +2,7 @@ module EulerGravity
   export EulerGravityLaw, γ, grav
 
   import ..Atum
-  using ..Atum: roe_avg
+  using ..Atum: avg, logavg, roe_avg
   using StaticArrays
   using LinearAlgebra: I
 
@@ -15,6 +15,11 @@ module EulerGravity
 
   γ(::EulerGravityLaw{_γ}) where {_γ} = _γ
   grav(::EulerGravityLaw{_γ, _grav}) where {_γ, _grav} = _grav
+
+  function geopotential(law, x⃗)
+    z = last(x⃗)
+    grav(law) * z
+  end
 
   function varsindices(law::EulerGravityLaw)
     S = Atum.numberofstates(law)
@@ -45,8 +50,7 @@ module EulerGravity
   function Atum.flux(law::EulerGravityLaw, q, x⃗)
     ρ, ρu⃗, ρe = unpackstate(law, q)
 
-    z = last(x⃗)
-    Φ = grav(law) * z
+    Φ = geopotential(law, x⃗)
 
     u⃗ = ρu⃗ / ρ
     p = pressure(law, ρ, ρu⃗, ρe, Φ)
@@ -58,7 +62,7 @@ module EulerGravity
     hcat(fρ, fρu⃗, fρe)
   end
 
-  function Atum.source!(law::EulerGravityLaw, dq, q, x⃗)
+  function Atum.nonconservative_term!(law::EulerGravityLaw, dq, q, x⃗)
     ix_ρ, ix_ρu⃗, _ = varsindices(law)
     @inbounds dq[ix_ρu⃗[end]] -= q[ix_ρ] * grav(law)
   end
@@ -66,16 +70,14 @@ module EulerGravity
   function Atum.wavespeed(law::EulerGravityLaw, n⃗, q, x⃗)
     ρ, ρu⃗, ρe = unpackstate(law, q)
 
-    z = last(x⃗)
-    Φ = grav(law) * z
+    Φ = geopotential(law, x⃗)
 
     u⃗ = ρu⃗ / ρ
     abs(n⃗' * u⃗) + soundspeed(law, ρ, ρu⃗, ρe, Φ)
   end
 
-  function (::Atum.RoeFlux)(law::EulerGravityLaw, n⃗, x⃗, q⁻, q⁺)
-    z = last(x⃗)
-    Φ = grav(law) * z
+  function Atum.surfaceflux(::Atum.RoeFlux, law::EulerGravityLaw, n⃗, x⃗, q⁻, q⁺)
+    Φ = geopotential(law, x⃗)
 
     f⁻ = Atum.flux(law, q⁻, x⃗)
     f⁺ = Atum.flux(law, q⁺, x⃗)
@@ -122,6 +124,43 @@ module EulerGravity
              w3 * (u⃗' * u⃗ / 2 + Φ) +
              w4 * (u⃗' * Δu⃗ - uₙ * Δuₙ)) / 2
 
-    (f⁻ + f⁺)' * n⃗ / 2 - vcat(fp_ρ, fp_ρu, fp_ρe)
+    (f⁻ + f⁺)' * n⃗ / 2 - SVector(fp_ρ, fp_ρu..., fp_ρe)
+  end
+
+  function Atum.twopointflux(::Atum.EntropyConservativeFlux,
+                             law::EulerGravityLaw,
+                             q₁, x⃗₁, q₂, x⃗₂)
+      FT = eltype(law)
+      ρ₁, ρu⃗₁, ρe₁ = unpackstate(law, q₁)
+      ρ₂, ρu⃗₂, ρe₂ = unpackstate(law, q₂)
+
+      Φ₁ = geopotential(law, x⃗₁)
+      u⃗₁ = ρu⃗₁ / ρ₁
+      p₁ = pressure(law, ρ₁, ρu⃗₁, ρe₁, Φ₁)
+      b₁ = ρ₁ / 2p₁
+
+      Φ₂ = geopotential(law, x⃗₂)
+      u⃗₂ = ρu⃗₂ / ρ₂
+      p₂ = pressure(law, ρ₂, ρu⃗₂, ρe₂, Φ₂)
+      b₂ = ρ₂ / 2p₂
+
+      ρ_avg = avg(ρ₁, ρ₂)
+      u⃗_avg = avg(u⃗₁, u⃗₂)
+      b_avg = avg(b₁, b₂)
+      Φ_avg = avg(Φ₁, Φ₂)
+
+      u²_avg = avg(u⃗₁' * u⃗₁, u⃗₂' * u⃗₂)
+      ρ_log = logavg(ρ₁, ρ₂)
+      b_log = logavg(b₁, b₂)
+
+      fρ = u⃗_avg * ρ_log
+      fρu⃗ = u⃗_avg * fρ' + ρ_avg / 2b_avg * I
+      fρe = (1 / (2 * (γ(law) - 1) * b_log) - u²_avg / 2 + Φ_avg) * fρ + fρu⃗ * u⃗_avg
+
+      # fluctuation
+      α = b_avg * ρ_log / 2b₁
+      fρu⃗ -= α * (Φ₁ - Φ₂) * I
+
+      hcat(fρ, fρu⃗, fρe)
   end
 end

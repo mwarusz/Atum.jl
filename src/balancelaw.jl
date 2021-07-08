@@ -10,3 +10,4 @@ function flux end
 function wavespeed end
 boundarystate(::AbstractBalanceLaw, n⃗, x⃗, q⁻, tag) = q⁻
 source!(::AbstractBalanceLaw, dq, q, x⃗) = nothing
+nonconservative_term!(::AbstractBalanceLaw, dq, q, x⃗) = nothing
