@@ -57,7 +57,7 @@ module EulerGravity
 
     hcat(fρ, fρu⃗, fρe)
   end
-  
+
   function Atum.source!(law::EulerGravityLaw, dq, q, x⃗)
     ix_ρ, ix_ρu⃗, _ = varsindices(law)
     @inbounds dq[ix_ρu⃗[end]] -= q[ix_ρ] * grav(law)
@@ -65,7 +65,7 @@ module EulerGravity
 
   function Atum.wavespeed(law::EulerGravityLaw, n⃗, q, x⃗)
     ρ, ρu⃗, ρe = unpackstate(law, q)
-    
+
     z = last(x⃗)
     Φ = grav(law) * z
 

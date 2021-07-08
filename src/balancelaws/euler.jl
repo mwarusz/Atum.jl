@@ -2,7 +2,7 @@ module Euler
   export EulerLaw, γ
 
   import ..Atum
-  using ..Atum: roe_avg
+  using ..Atum: avg, logavg, roe_avg
   using StaticArrays
   using LinearAlgebra: I
 
@@ -61,7 +61,7 @@ module Euler
     abs(n⃗' * u⃗) + soundspeed(law, ρ, ρu⃗, ρe)
   end
 
-  function (::Atum.RoeFlux)(law::EulerLaw, n⃗, x⃗, q⁻, q⁺)
+  function Atum.surfaceflux(::Atum.RoeFlux, law::EulerLaw, n⃗, x⃗, q⁻, q⁺)
     f⁻ = Atum.flux(law, q⁻, x⃗)
     f⁺ = Atum.flux(law, q⁺, x⃗)
 
@@ -108,5 +108,35 @@ module Euler
              w4 * (u⃗' * Δu⃗ - uₙ * Δuₙ)) / 2
 
     (f⁻ + f⁺)' * n⃗ / 2 - vcat(fp_ρ, fp_ρu, fp_ρe)
+  end
+
+  function Atum.twopointflux(::Atum.EntropyConservativeFlux,
+                             law::EulerLaw,
+                             q₁, _, q₂, _)
+      FT = eltype(law)
+      ρ₁, ρu⃗₁, ρe₁ = unpackstate(law, q₁)
+      ρ₂, ρu⃗₂, ρe₂ = unpackstate(law, q₂)
+
+      u⃗₁ = ρu⃗₁ / ρ₁
+      p₁ = pressure(law, ρ₁, ρu⃗₁, ρe₁)
+      b₁ = ρ₁ / 2p₁
+
+      u⃗₂ = ρu⃗₂ / ρ₂
+      p₂ = pressure(law, ρ₂, ρu⃗₂, ρe₂)
+      b₂ = ρ₂ / 2p₂
+
+      ρ_avg = avg(ρ₁, ρ₂)
+      u⃗_avg = avg(u⃗₁, u⃗₂)
+      b_avg = avg(b₁, b₂)
+
+      u²_avg = avg(u⃗₁' * u⃗₁, u⃗₂' * u⃗₂)
+      ρ_log = logavg(ρ₁, ρ₂)
+      b_log = logavg(b₁, b₂)
+
+      fρ = u⃗_avg * ρ_log
+      fρu⃗ = u⃗_avg * fρ' + ρ_avg / 2b_avg * I
+      fρe = (1 / (2 * (γ(law) - 1) * b_log) - u²_avg / 2) * fρ + fρu⃗ * u⃗_avg
+
+      hcat(fρ, fρu⃗, fρe)
   end
 end

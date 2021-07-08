@@ -2,7 +2,7 @@ module ShallowWater
   export ShallowWaterLaw, grav
 
   import ..Atum
-  using ..Atum: roe_avg
+  using ..Atum: avg, roe_avg
   using StaticArrays
   using LinearAlgebra: I
 
@@ -47,8 +47,8 @@ module ShallowWater
     u⃗ = ρu⃗ / ρ
     abs(n⃗' * u⃗) + sqrt(grav(law) * ρ)
   end
-  
-  function (::Atum.RoeFlux)(law::ShallowWaterLaw, n⃗, x⃗, q⁻, q⁺)
+
+  function Atum.surfaceflux(::Atum.RoeFlux, law::ShallowWaterLaw, n⃗, x⃗, q⁻, q⁺)
     g = grav(law)
     f⁻ = Atum.flux(law, q⁻, x⃗)
     f⁺ = Atum.flux(law, q⁺, x⃗)
@@ -90,5 +90,31 @@ module ShallowWater
     fp_ρθ = ((w1 + w2) * θ + w5) / 2
 
     (f⁻ + f⁺)' * n⃗ / 2 - vcat(fp_ρ, fp_ρu, fp_ρθ)
+  end
+
+  function Atum.twopointflux(::Atum.EntropyConservativeFlux,
+                             law::ShallowWaterLaw,
+                             q₁, _, q₂, _)
+      FT = eltype(law)
+      ρ₁, ρu⃗₁, ρθ₁ = unpackstate(law, q₁)
+      ρ₂, ρu⃗₂, ρθ₂ = unpackstate(law, q₂)
+
+      u⃗₁ = ρu⃗₁ / ρ₁
+      θ₁ = ρθ₁ / ρ₁
+
+      u⃗₂ = ρu⃗₂ / ρ₂
+      θ₂ = ρθ₂ / ρ₂
+
+      ρ_avg = avg(ρ₁, ρ₂)
+      ρ²_avg = avg(ρ₁ ^ 2, ρ₂ ^ 2)
+      u⃗_avg = avg(u⃗₁, u⃗₂)
+      ρu⃗_avg = avg(ρu⃗₁, ρu⃗₂)
+      θ_avg = avg(θ₁, θ₂)
+
+      fρ = ρu⃗_avg
+      fρu⃗ = ρu⃗_avg * u⃗_avg' + grav(law) * (ρ_avg ^ 2 - ρ²_avg / 2) * I
+      fρθ = ρu⃗_avg * θ_avg
+
+      hcat(fρ, fρu⃗, fρθ)
   end
 end

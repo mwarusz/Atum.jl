@@ -14,7 +14,7 @@ struct DGSEM{L, C, G, A1, A2, A3, NF}
     _, J = components(metrics(grid))
     MJ = M * J
     MJI = 1 ./ MJ
-    
+
     faceM = facemass(cell)
     _, faceJ = components(facemetrics(grid))
 
@@ -108,7 +108,7 @@ end
     ijk = i + Nq * (j - 1 + Nq * (k - 1))
 
     g = metrics[ijk, e].g
-    
+
     qijk = q[ijk, e]
     x⃗ijk = points[ijk, e]
     MJijk = MJ[ijk, e]
@@ -127,19 +127,19 @@ end
         l_F[i, j, k, d, s] *= MJijk
       end
     end
-    
+
     fill!(dqijk, -zero(FT))
     source!(law, dqijk, qijk, x⃗ijk)
 
     @synchronize
-    
+
     ijk = i + Nq * (j - 1 + Nq * (k - 1))
     MJIijk = MJI[ijk, e]
 
     @unroll for n in 1:Nq
-      Dni = D[n, i] * MJIijk 
-      Dnj = D[n, j] * MJIijk 
-      Dnk = D[n, k] * MJIijk 
+      Dni = D[n, i] * MJIijk
+      Dnj = D[n, j] * MJIijk
+      Dnk = D[n, k] * MJIijk
       @unroll for s in 1:Ns
         dqijk[s] += Dni * l_F[n, j, k, 1, s]
         if dim > 1
@@ -159,7 +159,7 @@ end
                               dq,
                               q,
                               ::Val{faceoffsets},
-                              numflux,
+                              numericalflux,
                               MJI,
                               faceix⁻,
                               faceix⁺,
@@ -172,7 +172,7 @@ end
     FT = eltype(q)
     nfaces = 2 * dim
   end
-  
+
   e⁻ = @index(Group, Linear)
   i = @index(Local, Linear)
 
@@ -183,10 +183,11 @@ end
 
         n⃗ = facenormal[j, e⁻]
         fMJ = faceMJ[j, e⁻]
-       
+
         x⃗⁻ = points[id⁻]
         q⁻ = q[id⁻]
-        boundarytag = boundaryfaces[face, e⁻] 
+
+        boundarytag = boundaryfaces[face, e⁻]
         if boundarytag == 0
           id⁺ = faceix⁺[j, e⁻]
           q⁺ = q[id⁺]
@@ -194,7 +195,7 @@ end
           q⁺ = boundarystate(law, n⃗, x⃗⁻, q⁻, boundarytag)
         end
 
-        nf = numflux(law, n⃗, x⃗⁻, q⁻, q⁺)
+        nf = surfaceflux(numericalflux, law, n⃗, x⃗⁻, q⁻, q⁺)
         dq[id⁻] -= fMJ * nf * MJI[id⁻]
 
         @synchronize(mod(face, 2) == 0)
