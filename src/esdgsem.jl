@@ -74,7 +74,8 @@ function (dg::ESDGSEM)(dq, q, time)
         Val(dir),
         Val(dim),
         Val(Nq),
-        Val(numberofstates(dg.law));
+        Val(numberofstates(dg.law)),
+        dir == 1; # add_source
         ndrange,
         dependencies = comp_stream
       )
@@ -269,6 +270,7 @@ end
                                    MJ,
                                    MJI,
                                    points,
+                                   add_source,
                                    ::Val{dir},
                                    ::Val{dim},
                                    ::Val{Nq},
@@ -278,9 +280,6 @@ end
     Nq1 = Nq
     Nq2 = dim > 1 ? Nq : 1
     Nq3 = dim > 2 ? Nq : 1
-
-    q2 = MVector{Ns, FT}(undef)
-    x⃗2 = MVector{dim, FT}(undef)
   end
 
   dqijk = @private FT (Ns,)
@@ -310,7 +309,7 @@ end
       x⃗1[d] = points[ijk, e][d]
     end
 
-    source!(law, dqijk, q1, x⃗1)
+    add_source && source!(law, dqijk, q1, x⃗1)
 
     @synchronize
 
@@ -329,12 +328,8 @@ end
         ild = i + Nq * ((j - 1) + Nq * (n - 1))
       end
 
-      @unroll for s in 1:Ns
-        q2[s] = q[ild, e][s]
-      end
-      @unroll for d in 1:dim
-        x⃗2[d] = points[ild, e][d]
-      end
+      q2 = q[ild, e]
+      x⃗2 = points[ild, e]
 
       f = twopointflux(volume_numericalflux, law, q1, x⃗1, q2, x⃗2)
       @unroll for s in 1:Ns
