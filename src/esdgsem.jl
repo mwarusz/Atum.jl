@@ -71,11 +71,11 @@ function (dg::ESDGSEM)(dq, q, time)
         dg.MJ,
         dg.MJI,
         points(grid),
+        dir == 1, # add_source
         Val(dir),
         Val(dim),
         Val(Nq),
-        Val(numberofstates(dg.law)),
-        dir == 1; # add_source
+        Val(numberofstates(dg.law));
         ndrange,
         dependencies = comp_stream
       )
