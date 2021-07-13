@@ -280,9 +280,6 @@ end
     Nq1 = Nq
     Nq2 = dim > 1 ? Nq : 1
     Nq3 = dim > 2 ? Nq : 1
-
-    q2 = MVector{Ns, FT}(undef)
-    x⃗2 = MVector{dim, FT}(undef)
   end
 
   dqijk = @private FT (Ns,)
@@ -331,12 +328,8 @@ end
         ild = i + Nq * ((j - 1) + Nq * (n - 1))
       end
 
-      @unroll for s in 1:Ns
-        q2[s] = q[ild, e][s]
-      end
-      @unroll for d in 1:dim
-        x⃗2[d] = points[ild, e][d]
-      end
+      q2 = q[ild, e]
+      x⃗2 = points[ild, e]
 
       f = twopointflux(volume_numericalflux, law, q1, x⃗1, q2, x⃗2)
       @unroll for s in 1:Ns
