@@ -74,7 +74,8 @@ function (dg::ESDGSEM)(dq, q, time)
         Val(dir),
         Val(dim),
         Val(Nq),
-        Val(numberofstates(dg.law));
+        Val(numberofstates(dg.law)),
+        dir == 1; # add_source
         ndrange,
         dependencies = comp_stream
       )
@@ -269,6 +270,7 @@ end
                                    MJ,
                                    MJI,
                                    points,
+                                   add_source,
                                    ::Val{dir},
                                    ::Val{dim},
                                    ::Val{Nq},
@@ -310,7 +312,7 @@ end
       x⃗1[d] = points[ijk, e][d]
     end
 
-    source!(law, dqijk, q1, x⃗1)
+    add_source && source!(law, dqijk, q1, x⃗1)
 
     @synchronize
 
