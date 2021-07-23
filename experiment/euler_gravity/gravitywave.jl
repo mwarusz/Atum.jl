@@ -1,7 +1,7 @@
 using Atum
 using Atum.EulerGravity
 
-using CUDA
+#using CUDA
 using LinearAlgebra: norm
 using StaticArrays: SVector
 using WriteVTK
@@ -146,7 +146,7 @@ function run(A, FT, N, KX, KY; outputvtk=true)
 
   cfl = FT(1 // 3)
   dt = cfl * step(vz) / N / 330
-  timeend = FT(30 * 60)
+  timeend = @isdefined(_testing) ? 10dt : FT(30 * 60)
  
   q = gravitywave.(Ref(law), points(grid), FT(0))
   qref = gravitywave.(Ref(law), points(grid), FT(0), false)
@@ -187,7 +187,7 @@ function run(A, FT, N, KX, KY; outputvtk=true)
 end
 
 let
-  A = CuArray
+  A = Array
   FT = Float64
   N = 4
 
@@ -196,14 +196,16 @@ let
   KX_base = round(Int, ndof_x / N)
   KY_base = round(Int, ndof_y / N)
 
-  nlevels = 2
+  nlevels = @isdefined(_testing) ? 1 : 2
   errors = zeros(FT, nlevels)
   for l in 1:nlevels
     KX = KX_base * 2 ^ (l - 1)
     KY = KY_base * 2 ^ (l - 1)
     errors[l] = run(A, FT, N, KX, KY)
   end
-  rates = log2.(errors[1:(nlevels-1)] ./ errors[2:nlevels])
-  @show errors
-  @show rates
+  if nlevels > 1
+    rates = log2.(errors[1:(nlevels-1)] ./ errors[2:nlevels])
+    @show errors
+    @show rates
+  end
 end

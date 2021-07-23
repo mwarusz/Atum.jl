@@ -62,7 +62,7 @@ function run(A, FT, N, K; outputvtk=true)
 
   cfl = FT(1 // 3)
   dt = cfl * step(vz) / N / 330
-  timeend = FT(500)
+  timeend = @isdefined(_testing) ? 10dt : FT(500)
  
   q = risingbubble.(Ref(law), points(grid))
   qref = risingbubble.(Ref(law), points(grid), false)

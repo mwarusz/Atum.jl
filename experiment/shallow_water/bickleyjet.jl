@@ -48,7 +48,7 @@ function run(A, FT, N, K; outputvtk=true)
 
   cfl = FT(1 // 8)
   dt = cfl * step(v1d) / N / sqrt(grav(law))
-  timeend = FT(200)
+  timeend = @isdefined(_testing) ? 10dt : FT(200)
  
   q = bickleyjet.(Ref(law), points(grid))
 
