@@ -38,7 +38,7 @@ function run(A, FT, N, K)
   odesolver = LSRK54(dg, q, dt)
   solve!(q, timeend, odesolver)
 
-  @pgf begin
+  @pgf if !@isdefined(_testing)
     ρ, ρu, ρe = components(q)
     p = Euler.pressure.(Ref(law), ρ, ρu, ρe)
     u = ρu ./ ρ

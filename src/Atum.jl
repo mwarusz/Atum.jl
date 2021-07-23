@@ -13,6 +13,7 @@ include("balancelaw.jl")
 include("numericalfluxes.jl")
 include("dgsem.jl")
 include("esdgsem.jl")
+include("measures.jl")
 include("odesolvers.jl")
 
 include("balancelaws/advection.jl")

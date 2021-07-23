@@ -2,15 +2,23 @@ using Atum
 using Atum.Advection
 
 using Test
+using Printf
 using StaticArrays: SVector
 using LinearAlgebra: norm
+
+if !@isdefined integration_testing
+  const integration_testing = parse(
+    Bool,
+    lowercase(get(ENV, "ATUM_INTEGRATION_TESTING", "false")),
+  )
+end
 
 function wave(law, x⃗, t)
   ρ = 2 + sin(π * (sum(x⃗) - sum(law.u⃗) * t))
   SVector(ρ)
 end
 
-function run(A, FT, N, K)
+function run(A, FT, N, K; esdg=false)
   Nq = N + 1
 
   law = AdvectionLaw{FT, 1}()
@@ -19,7 +27,13 @@ function run(A, FT, N, K)
   v1d = range(FT(-1), stop=FT(1), length=K+1)
   grid = brickgrid(cell, (v1d,); periodic=(true,))
 
-  dg = DGSEM(; law, cell, grid, numericalflux = RusanovFlux())
+  if esdg
+    dg = ESDGSEM(; law, cell, grid,
+                 volume_numericalflux = CentralFlux(),
+                 surface_numericalflux = RusanovFlux())
+  else
+    dg = DGSEM(; law, cell, grid, numericalflux = RusanovFlux())
+  end
 
   cfl = FT(1 // 2)
   dt = cfl * step(v1d) / N / norm(law.u⃗)
@@ -27,14 +41,24 @@ function run(A, FT, N, K)
   
   q = wave.(Ref(law), points(grid), FT(0))
 
+  @info @sprintf """Starting
+  N       = %d
+  K       = %d
+  esdg    = %s
+  norm(q) = %.16e
+  """ N K esdg weightednorm(dg, q)
+
   odesolver = LSRK54(dg, q, dt)
   solve!(q, timeend, odesolver)
 
   qexact = wave.(Ref(law), points(grid), timeend)
-  errf = map(components(q), components(qexact)) do f, fexact
-    sqrt(sum(dg.MJ .* (f .- fexact) .^ 2))
-  end
-  errf[1]
+  errf = weightednorm(dg, q .- qexact)
+
+  @info @sprintf """Finished
+  norm(q)      = %.16e
+  norm(q - qe) = %.16e
+  """ weightednorm(dg, q) errf
+  errf
 end
 
 let
@@ -42,13 +66,33 @@ let
   FT = Float64
   N = 4
 
-  nlevels = 2
-  errors = zeros(FT, nlevels)
+  expected_error = Dict()
 
-  for l in 1:nlevels
-    K = 5 * 2 ^ (l - 1)
-    errors[l] = run(A, FT, N, K)
+  #esdg, lev
+  expected_error[false, 1] = 1.5238393162339734e-04
+  expected_error[false, 2] = 4.8377348010293410e-06
+  expected_error[false, 3] = 1.4063471307765498e-07
+  expected_error[false, 4] = 4.5781066120767573e-09
+
+  expected_error[true, 1] = 1.5238393162391597e-04
+  expected_error[true, 2] = 4.8377348011318472e-06
+  expected_error[true, 3] = 1.4063471309426943e-07
+  expected_error[true, 4] = 4.5781064622952347e-09
+
+  nlevels = integration_testing ? 4 : 1
+
+  @testset for esdg in (false, true)
+    errors = zeros(FT, nlevels)
+    for l in 1:nlevels
+      K = 5 * 2 ^ (l - 1)
+      errors[l] = run(A, FT, N, K; esdg)
+      @test errors[l] ≈ expected_error[esdg, l]
+    end
+    if nlevels > 1
+      rates = log2.(errors[1:(nlevels-1)] ./ errors[2:nlevels])
+      @info "Convergence rates\n" *
+        join(["rate for levels $l → $(l + 1) = $(rates[l])" for l in 1:(nlevels - 1)], "\n")
+      @test rates[end] ≈ N + 1 atol=0.1
+    end
   end
-  rates = log2.(errors[1:(nlevels-1)] ./ errors[2:nlevels])
-  @test rates[end] ≈ N + 1 atol=0.1
 end
