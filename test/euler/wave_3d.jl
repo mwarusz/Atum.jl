@@ -23,7 +23,7 @@ function wave(law, x⃗, t)
   SVector(ρ, ρu⃗..., ρe)
 end
 
-function run(A, FT, N, K; esdg=false)
+function run(A, FT, N, K; volume_form=WeakForm())
   Nq = N + 1
 
   law = EulerLaw{FT, 3}()
@@ -32,13 +32,8 @@ function run(A, FT, N, K; esdg=false)
   v1d = range(FT(-1), stop=FT(1), length=K+1)
   grid = brickgrid(cell, (v1d, v1d, v1d); periodic=(true, true, true))
 
-  if esdg
-    dg = ESDGSEM(; law, cell, grid,
-                 volume_numericalflux = EntropyConservativeFlux(),
-                 surface_numericalflux = RusanovFlux())
-  else
-    dg = DGSEM(; law, cell, grid, numericalflux = RusanovFlux())
-  end
+  dg = DGSEM(; law, cell, grid, volume_form,
+               surface_numericalflux = RusanovFlux())
 
   cfl = FT(1 // 4)
   dt = cfl * step(v1d) / N / Euler.soundspeed(law, FT(1), FT(1))
@@ -47,11 +42,11 @@ function run(A, FT, N, K; esdg=false)
   q = wave.(Ref(law), points(grid), FT(0))
 
   @info @sprintf """Starting
-  N       = %d
-  K       = %d
-  esdg    = %s
-  norm(q) = %.16e
-  """ N K esdg weightednorm(dg, q)
+  N           = %d
+  K           = %d
+  volume_form = %s
+  norm(q)     = %.16e
+  """ N K volume_form weightednorm(dg, q)
 
   odesolver = LSRK54(dg, q, dt)
   timeend = dt
@@ -74,22 +69,23 @@ let
 
   expected_error = Dict()
 
-  #esdg, lev
-  expected_error[false, 1] = 3.9411906944785454e-04
-  expected_error[false, 2] = 1.2806136567178496e-05
+  #form, lev
+  expected_error[WeakForm(), 1] = 3.9411906944785454e-04
+  expected_error[WeakForm(), 2] = 1.2806136567178496e-05
 
-  expected_error[true, 1] = 6.7581626007666136e-04
-  expected_error[true, 2] = 2.3664493373919179e-05
+  expected_error[FluxDifferencingForm(EntropyConservativeFlux()), 1] = 6.7581626007666136e-04
+  expected_error[FluxDifferencingForm(EntropyConservativeFlux()), 2] = 2.3664493373919179e-05
 
   nlevels = integration_testing ? 2 : 1
 
-  @testset for esdg in (false, true)
+  @testset for volume_form in (WeakForm(),
+                               FluxDifferencingForm(EntropyConservativeFlux()))
     errors = zeros(FT, nlevels)
     for l in 1:nlevels
       K = 5 * 2 ^ (l - 1)
-      errf = run(A, FT, N, K; esdg)
+      errf = run(A, FT, N, K; volume_form)
       errors[l] = errf
-      @test errors[l] ≈ expected_error[esdg, l]
+      @test errors[l] ≈ expected_error[volume_form, l]
     end
 
     if nlevels > 1

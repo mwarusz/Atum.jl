@@ -30,7 +30,7 @@ function vortex(law, x⃗, t)
   SVector(ρ, ρu⃗..., ρe)
 end
 
-function run(A, FT, N, K; esdg=false)
+function run(A, FT, N, K; volume_form=WeakForm())
   Nq = N + 1
 
   law = EulerLaw{FT, 2}()
@@ -40,13 +40,8 @@ function run(A, FT, N, K; esdg=false)
   vy = range(FT(-5), stop=FT(5), length=K+1)
   grid = brickgrid(cell, (vx, vy); periodic=(true, true))
 
-  if esdg
-    dg = ESDGSEM(; law, cell, grid,
-                 volume_numericalflux = EntropyConservativeFlux(),
-                 surface_numericalflux = RusanovFlux())
-  else
-    dg = DGSEM(; law, cell, grid, numericalflux = RusanovFlux())
-  end
+  dg = DGSEM(; law, cell, grid, volume_form,
+               surface_numericalflux = RusanovFlux())
 
   cfl = FT(1 // 4)
   dt = cfl * step(vy) / N
@@ -55,11 +50,11 @@ function run(A, FT, N, K; esdg=false)
   q = vortex.(Ref(law), points(grid), FT(0))
 
   @info @sprintf """Starting
-  N       = %d
-  K       = %d
-  esdg    = %s
-  norm(q) = %.16e
-  """ N K esdg weightednorm(dg, q)
+  N           = %d
+  K           = %d
+  volume_form = %s
+  norm(q)     = %.16e
+  """ N K volume_form weightednorm(dg, q)
 
   odesolver = LSRK54(dg, q, dt)
   solve!(q, timeend, odesolver)
@@ -81,26 +76,27 @@ let
 
   expected_error = Dict()
 
-  #esdg, lev
-  expected_error[false, 1] = 2.1296858506446990e+00
-  expected_error[false, 2] = 5.9526168482660669e-01
-  expected_error[false, 3] = 6.4358678661161267e-02
-  expected_error[false, 4] = 2.3640146930597296e-03
+  #form, lev
+  expected_error[WeakForm(), 1] = 2.1296858506446990e+00
+  expected_error[WeakForm(), 2] = 5.9526168482660669e-01
+  expected_error[WeakForm(), 3] = 6.4358678661161267e-02
+  expected_error[WeakForm(), 4] = 2.3640146930597296e-03
 
-  expected_error[true, 1] = 2.0789522602391144e+00
-  expected_error[true, 2] = 3.5478518460567871e-01
-  expected_error[true, 3] = 3.0653814065252447e-02
-  expected_error[true, 4] = 1.3056958215461041e-03
+  expected_error[FluxDifferencingForm(EntropyConservativeFlux()), 1] = 2.0789522602391144e+00
+  expected_error[FluxDifferencingForm(EntropyConservativeFlux()), 2] = 3.5478518460567871e-01
+  expected_error[FluxDifferencingForm(EntropyConservativeFlux()), 3] = 3.0653814065252447e-02
+  expected_error[FluxDifferencingForm(EntropyConservativeFlux()), 4] = 1.3056958215461041e-03
 
   nlevels = integration_testing ? 4 : 1
 
-  @testset for esdg in (false, true)
+  @testset for volume_form in (WeakForm(),
+                               FluxDifferencingForm(EntropyConservativeFlux()))
     errors = zeros(FT, nlevels)
     for l in 1:nlevels
       K = 5 * 2 ^ (l - 1)
-      errf = run(A, FT, N, K; esdg)
+      errf = run(A, FT, N, K; volume_form)
       errors[l] = errf
-      @test errors[l] ≈ expected_error[esdg, l]
+      @test errors[l] ≈ expected_error[volume_form, l]
     end
 
     if nlevels > 1
