@@ -35,7 +35,7 @@ function bickleyjet(law, x⃗)
   SVector(ρ, ρu, ρv, ρθ)
 end
 
-function run(A, FT, N, K; outputvtk=true)
+function run(A, FT, N, K; volume_form=WeakForm(), outputvtk=true)
   Nq = N + 1
 
   law = ShallowWaterLaw{FT, 2}()
@@ -44,7 +44,8 @@ function run(A, FT, N, K; outputvtk=true)
   v1d = range(FT(-2π), stop=FT(2π), length=K+1)
   grid = brickgrid(cell, (v1d, v1d); periodic = (true, false))
 
-  dg = DGSEM(; law, cell, grid, numericalflux = RoeFlux())
+  dg = DGSEM(; law, cell, grid, volume_form,
+               surface_numericalflux = RoeFlux())
 
   cfl = FT(1 // 8)
   dt = cfl * step(v1d) / N / sqrt(grav(law))

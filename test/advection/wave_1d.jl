@@ -18,7 +18,7 @@ function wave(law, x⃗, t)
   SVector(ρ)
 end
 
-function run(A, FT, N, K; esdg=false)
+function run(A, FT, N, K; volume_form=WeakForm())
   Nq = N + 1
 
   law = AdvectionLaw{FT, 1}()
@@ -27,13 +27,8 @@ function run(A, FT, N, K; esdg=false)
   v1d = range(FT(-1), stop=FT(1), length=K+1)
   grid = brickgrid(cell, (v1d,); periodic=(true,))
 
-  if esdg
-    dg = ESDGSEM(; law, cell, grid,
-                 volume_numericalflux = CentralFlux(),
-                 surface_numericalflux = RusanovFlux())
-  else
-    dg = DGSEM(; law, cell, grid, numericalflux = RusanovFlux())
-  end
+  dg = DGSEM(; law, cell, grid, volume_form,
+               surface_numericalflux = RusanovFlux())
 
   cfl = FT(1 // 2)
   dt = cfl * step(v1d) / N / norm(law.u⃗)
@@ -42,11 +37,11 @@ function run(A, FT, N, K; esdg=false)
   q = wave.(Ref(law), points(grid), FT(0))
 
   @info @sprintf """Starting
-  N       = %d
-  K       = %d
-  esdg    = %s
-  norm(q) = %.16e
-  """ N K esdg weightednorm(dg, q)
+  N           = %d
+  K           = %d
+  volume_form = %s
+  norm(q)     = %.16e
+  """ N K volume_form weightednorm(dg, q)
 
   odesolver = LSRK54(dg, q, dt)
   solve!(q, timeend, odesolver)
@@ -68,25 +63,25 @@ let
 
   expected_error = Dict()
 
-  #esdg, lev
-  expected_error[false, 1] = 1.5238393162339734e-04
-  expected_error[false, 2] = 4.8377348010293410e-06
-  expected_error[false, 3] = 1.4063471307765498e-07
-  expected_error[false, 4] = 4.5781066120767573e-09
+  #form, lev
+  expected_error[WeakForm(), 1] = 1.5238393162339734e-04
+  expected_error[WeakForm(), 2] = 4.8377348010293410e-06
+  expected_error[WeakForm(), 3] = 1.4063471307765498e-07
+  expected_error[WeakForm(), 4] = 4.5781066120767573e-09
 
-  expected_error[true, 1] = 1.5238393162391597e-04
-  expected_error[true, 2] = 4.8377348011318472e-06
-  expected_error[true, 3] = 1.4063471309426943e-07
-  expected_error[true, 4] = 4.5781064622952347e-09
+  expected_error[FluxDifferencingForm(CentralFlux()), 1] = 1.5238393162391597e-04
+  expected_error[FluxDifferencingForm(CentralFlux()), 2] = 4.8377348011318472e-06
+  expected_error[FluxDifferencingForm(CentralFlux()), 3] = 1.4063471309426943e-07
+  expected_error[FluxDifferencingForm(CentralFlux()), 4] = 4.5781064622952347e-09
 
   nlevels = integration_testing ? 4 : 1
 
-  @testset for esdg in (false, true)
+  @testset for volume_form in (WeakForm(), FluxDifferencingForm(CentralFlux()))
     errors = zeros(FT, nlevels)
     for l in 1:nlevels
       K = 5 * 2 ^ (l - 1)
-      errors[l] = run(A, FT, N, K; esdg)
-      @test errors[l] ≈ expected_error[esdg, l]
+      errors[l] = run(A, FT, N, K; volume_form)
+      @test errors[l] ≈ expected_error[volume_form, l]
     end
     if nlevels > 1
       rates = log2.(errors[1:(nlevels-1)] ./ errors[2:nlevels])

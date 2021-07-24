@@ -48,7 +48,7 @@ function risingbubble(law, x⃗, add_perturbation=true)
   SVector(ρ, ρu, ρv, ρe)
 end
 
-function run(A, FT, N, K; outputvtk=true)
+function run(A, FT, N, K; volume_form=WeakForm(), outputvtk=true)
   Nq = N + 1
 
   law = EulerGravityLaw{FT, 2}()
@@ -58,7 +58,8 @@ function run(A, FT, N, K; outputvtk=true)
   vz = range(FT(0), stop=FT(1e3), length=K+1)
   grid = brickgrid(cell, (vx, vz); periodic = (true, false))
 
-  dg = DGSEM(; law, cell, grid, numericalflux = RoeFlux())
+  dg = DGSEM(; law, cell, grid, volume_form,
+               surface_numericalflux = RoeFlux())
 
   cfl = FT(1 // 3)
   dt = cfl * step(vz) / N / 330

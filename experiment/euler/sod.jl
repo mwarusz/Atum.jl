@@ -16,7 +16,7 @@ end
 import Atum: boundarystate
 boundarystate(law::EulerLaw, n⃗, x⃗, q⁻, _) = sod(law, x⃗)
 
-function run(A, FT, N, K)
+function run(A, FT, N, K; volume_form=WeakForm())
   Nq = N + 1
 
   law = EulerLaw{FT, 1}()
@@ -25,8 +25,7 @@ function run(A, FT, N, K)
   v1d = range(FT(0), stop=FT(1), length=K+1)
   grid = brickgrid(cell, (v1d,); periodic=(false,))
 
-  dg = ESDGSEM(; law, cell, grid,
-               volume_numericalflux = EntropyConservativeFlux(),
+  dg = DGSEM(; law, cell, grid, volume_form,
                surface_numericalflux = RusanovFlux())
 
   cfl = FT(1 // 4)
@@ -65,6 +64,7 @@ let
   FT = Float64
   N = 4
   K = 32
+  volume_form = FluxDifferencingForm(EntropyConservativeFlux())
 
-  errf = run(A, FT, N, K)
+  errf = run(A, FT, N, K; volume_form)
 end

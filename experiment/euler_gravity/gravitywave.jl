@@ -129,7 +129,7 @@ function gravitywave(law, x⃗, t, add_perturbation=true)
   return SVector(ρ, ρ * u, ρ * w, ρe)
 end
 
-function run(A, FT, N, KX, KY; outputvtk=true)
+function run(A, FT, N, KX, KY; volume_form=WeakForm(), outputvtk=true)
   Nq = N + 1
 
   law = EulerGravityLaw{FT, 2}()
@@ -139,10 +139,8 @@ function run(A, FT, N, KX, KY; outputvtk=true)
   vz = range(FT(0), stop=FT(10e3), length=KY+1)
   grid = brickgrid(cell, (vx, vz); periodic = (true, false))
 
-  dg = DGSEM(; law, cell, grid, numericalflux = RoeFlux())
-  #dg = ESDGSEM(; law, cell, grid,
-  #             volume_numericalflux = EntropyConservativeFlux(),
-  #             surface_numericalflux = RoeFlux())
+  dg = DGSEM(; law, cell, grid, volume_form,
+               surface_numericalflux = RoeFlux())
 
   cfl = FT(1 // 3)
   dt = cfl * step(vz) / N / 330
