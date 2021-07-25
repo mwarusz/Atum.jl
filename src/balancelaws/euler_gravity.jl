@@ -6,20 +6,18 @@ module EulerGravity
   using StaticArrays
   using LinearAlgebra: I
 
-  struct EulerGravityLaw{γ, grav, FT, D, S} <: Atum.AbstractBalanceLaw{FT, D, S}
-    function EulerGravityLaw{FT, D}(; γ = 7 // 5, grav = 981 // 100) where {FT, D}
+  struct EulerGravityLaw{γ, grav, pde, FT, D, S} <: Atum.AbstractBalanceLaw{FT, D, S}
+    function EulerGravityLaw{FT, D}(; γ = 7 // 5,
+                                      grav = 981 // 100,
+                                      pde_level_balance = false) where {FT, D}
       S = 2 + D
-      new{FT(γ), FT(grav), FT, D, S}()
+      new{FT(γ), FT(grav), pde_level_balance, FT, D, S}()
     end
   end
 
   γ(::EulerGravityLaw{_γ}) where {_γ} = _γ
   grav(::EulerGravityLaw{_γ, _grav}) where {_γ, _grav} = _grav
-
-  function geopotential(law, x⃗)
-    z = last(x⃗)
-    grav(law) * z
-  end
+  pde_level_balance(::EulerGravityLaw{_γ, _grav, _pde}) where {_γ, _grav, _pde} = _pde
 
   function varsindices(law::EulerGravityLaw)
     S = Atum.numberofstates(law)
@@ -32,6 +30,24 @@ module EulerGravity
   function unpackstate(law::EulerGravityLaw, q)
     ix_ρ, ix_ρu⃗, ix_ρe = varsindices(law)
     @inbounds q[ix_ρ], q[ix_ρu⃗], q[ix_ρe]
+  end
+
+  referencestate(law::EulerGravityLaw, x⃗) = SVector{0, eltype(law)}()
+  reference_ρ(law::EulerGravityLaw, aux) = @inbounds aux[ndims(law) + 1]
+  reference_p(law::EulerGravityLaw, aux) = @inbounds aux[ndims(law) + 2]
+
+  function Atum.auxiliary(law::EulerGravityLaw, x⃗)
+    vcat(x⃗, referencestate(law, x⃗))
+  end
+
+  function coordinates(law::EulerGravityLaw, aux)
+    aux[SOneTo(ndims(law))]
+  end
+
+  function geopotential(law, aux)
+    x⃗ = coordinates(law, aux)
+    z = last(x⃗)
+    grav(law) * z
   end
 
   function pressure(law::EulerGravityLaw, ρ, ρu⃗, ρe, Φ)
@@ -47,40 +63,52 @@ module EulerGravity
     soundspeed(law, ρ, pressure(law, ρ, ρu⃗, ρe, Φ))
   end
 
-  function Atum.flux(law::EulerGravityLaw, q, x⃗)
+  function Atum.flux(law::EulerGravityLaw, q, aux)
     ρ, ρu⃗, ρe = unpackstate(law, q)
 
-    Φ = geopotential(law, x⃗)
+    Φ = geopotential(law, aux)
 
     u⃗ = ρu⃗ / ρ
     p = pressure(law, ρ, ρu⃗, ρe, Φ)
 
+    δp = p
+    if pde_level_balance(law)
+      δp -= reference_p(law, aux)
+    end
+
     fρ = ρu⃗
-    fρu⃗ = ρu⃗ * u⃗' + p * I
+    fρu⃗ = ρu⃗ * u⃗' + δp * I
     fρe = u⃗ * (ρe + p)
 
     hcat(fρ, fρu⃗, fρe)
   end
 
-  function Atum.nonconservative_term!(law::EulerGravityLaw, dq, q, x⃗)
+  function Atum.nonconservative_term!(law::EulerGravityLaw, dq, q, aux)
     ix_ρ, ix_ρu⃗, _ = varsindices(law)
-    @inbounds dq[ix_ρu⃗[end]] -= q[ix_ρ] * grav(law)
+
+    @inbounds ρ = q[ix_ρ]
+
+    if pde_level_balance(law)
+      ρ -= reference_ρ(law, aux)
+    end
+
+    @inbounds dq[ix_ρu⃗[end]] -= ρ * grav(law)
   end
 
-  function Atum.wavespeed(law::EulerGravityLaw, n⃗, q, x⃗)
+  function Atum.wavespeed(law::EulerGravityLaw, n⃗, q, aux)
     ρ, ρu⃗, ρe = unpackstate(law, q)
 
-    Φ = geopotential(law, x⃗)
+    Φ = geopotential(law, aux)
 
     u⃗ = ρu⃗ / ρ
     abs(n⃗' * u⃗) + soundspeed(law, ρ, ρu⃗, ρe, Φ)
   end
 
-  function Atum.surfaceflux(::Atum.RoeFlux, law::EulerGravityLaw, n⃗, x⃗, q⁻, q⁺)
-    Φ = geopotential(law, x⃗)
+  function Atum.surfaceflux(::Atum.RoeFlux, law::EulerGravityLaw, n⃗, q⁻, aux⁻, q⁺, aux⁺)
+    Φ = geopotential(law, aux⁻)
 
-    f⁻ = Atum.flux(law, q⁻, x⃗)
-    f⁺ = Atum.flux(law, q⁺, x⃗)
+    f⁻ = Atum.flux(law, q⁻, aux⁻)
+    f⁺ = Atum.flux(law, q⁺, aux⁺)
 
     ρ⁻, ρu⃗⁻, ρe⁻ = unpackstate(law, q⁻)
     u⃗⁻ = ρu⃗⁻ / ρ⁻
@@ -129,17 +157,17 @@ module EulerGravity
 
   function Atum.twopointflux(::Atum.EntropyConservativeFlux,
                              law::EulerGravityLaw,
-                             q₁, x⃗₁, q₂, x⃗₂)
+                             q₁, aux₁, q₂, aux₂)
       FT = eltype(law)
       ρ₁, ρu⃗₁, ρe₁ = unpackstate(law, q₁)
       ρ₂, ρu⃗₂, ρe₂ = unpackstate(law, q₂)
 
-      Φ₁ = geopotential(law, x⃗₁)
+      Φ₁ = geopotential(law, aux₁)
       u⃗₁ = ρu⃗₁ / ρ₁
       p₁ = pressure(law, ρ₁, ρu⃗₁, ρe₁, Φ₁)
       b₁ = ρ₁ / 2p₁
 
-      Φ₂ = geopotential(law, x⃗₂)
+      Φ₂ = geopotential(law, aux₂)
       u⃗₂ = ρu⃗₂ / ρ₂
       p₂ = pressure(law, ρ₂, ρu⃗₂, ρe₂, Φ₂)
       b₂ = ρ₂ / 2p₂

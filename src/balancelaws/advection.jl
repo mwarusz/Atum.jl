@@ -8,6 +8,6 @@ module Advection
     u⃗::SVector{D, FT} = ones(SVector{D, FT})
   end
 
-  Atum.flux(law::AdvectionLaw, q, x⃗) = law.u⃗ * q'
-  Atum.wavespeed(law::AdvectionLaw, n⃗, q, x⃗) = abs(n⃗' * law.u⃗)
+  Atum.flux(law::AdvectionLaw, q, aux) = law.u⃗ * q'
+  Atum.wavespeed(law::AdvectionLaw, n⃗, q, aux) = abs(n⃗' * law.u⃗)
 end

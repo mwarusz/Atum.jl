@@ -22,20 +22,20 @@ roe_avg(ρ⁻, ρ⁺, s⁻, s⁺) = (sqrt(ρ⁻) * s⁻ + sqrt(ρ⁺) * s⁺) / 
 
 abstract type AbstractNumericalFlux end
 function twopointflux end
-function surfaceflux(flux::AbstractNumericalFlux, law::AbstractBalanceLaw, n⃗, x⃗, q⁻, q⁺)
-  twopointflux(flux, law, q⁻, x⃗, q⁺, x⃗)' * n⃗
+function surfaceflux(flux::AbstractNumericalFlux, law::AbstractBalanceLaw, n⃗, q⁻, aux⁻, q⁺, aux⁺)
+  twopointflux(flux, law, q⁻, aux⁻, q⁺, aux⁺)' * n⃗
 end
 
 struct CentralFlux <: AbstractNumericalFlux end
-function twopointflux(::CentralFlux, law::AbstractBalanceLaw, q₁, x⃗₁, q₂, x⃗₂)
-  (flux(law, q₁, x⃗₁) + flux(law, q₂, x⃗₂)) / 2
+function twopointflux(::CentralFlux, law::AbstractBalanceLaw, q₁, aux₁, q₂, aux₂)
+  (flux(law, q₁, aux₁) + flux(law, q₂, aux₂)) / 2
 end
 
 struct RusanovFlux <: AbstractNumericalFlux end
-function surfaceflux(::RusanovFlux, law::AbstractBalanceLaw, n⃗, x⃗, q⁻, q⁺)
-  fc = surfaceflux(CentralFlux(), law, n⃗, x⃗, q⁻, q⁺)
-  ws⁻ = wavespeed(law, n⃗, q⁻, x⃗)
-  ws⁺ = wavespeed(law, n⃗, q⁺, x⃗)
+function surfaceflux(::RusanovFlux, law::AbstractBalanceLaw, n⃗, q⁻, aux⁻, q⁺, aux⁺)
+  fc = surfaceflux(CentralFlux(), law, n⃗, q⁻, aux⁻, q⁺, aux⁺)
+  ws⁻ = wavespeed(law, n⃗, q⁻, aux⁻)
+  ws⁺ = wavespeed(law, n⃗, q⁺, aux⁺)
   fc - max(ws⁻, ws⁺) * (q⁺ - q⁻) / 2
 end
 

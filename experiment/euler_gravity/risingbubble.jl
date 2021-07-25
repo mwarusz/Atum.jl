@@ -5,11 +5,11 @@ using StaticArrays: SVector
 using WriteVTK
 
 import Atum: boundarystate
-function boundarystate(law::EulerGravityLaw, n⃗, x⃗, q⁻, _)
+function boundarystate(law::EulerGravityLaw, n⃗, q⁻, aux⁻, _)
   ρ⁻, ρu⃗⁻, ρe⁻ = EulerGravity.unpackstate(law, q⁻)
   ρ⁺, ρe⁺ = ρ⁻, ρe⁻
   ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
-  SVector(ρ⁺, ρu⃗⁺..., ρe⁺)
+  SVector(ρ⁺, ρu⃗⁺..., ρe⁺), aux⁻
 end
 
 function risingbubble(law, x⃗, add_perturbation=true)

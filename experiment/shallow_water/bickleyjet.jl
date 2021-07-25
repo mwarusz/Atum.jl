@@ -5,11 +5,11 @@ using StaticArrays: SVector
 using WriteVTK
 
 import Atum: boundarystate
-function boundarystate(law::ShallowWaterLaw, n⃗, x⃗, q⁻, _)
+function boundarystate(law::ShallowWaterLaw, n⃗, q⁻, aux⁻, _)
   ρ⁻, ρu⃗⁻, ρθ⁻ = ShallowWater.unpackstate(law, q⁻)
   ρ⁺, ρθ⁺ = ρ⁻, ρθ⁻
   ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
-  SVector(ρ⁺, ρu⃗⁺..., ρθ⁺)
+  SVector(ρ⁺, ρu⃗⁺..., ρθ⁺), aux⁻
 end
 
 function bickleyjet(law, x⃗)
