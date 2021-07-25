@@ -14,7 +14,10 @@ function sod(law, x⃗)
 end
 
 import Atum: boundarystate
-boundarystate(law::EulerLaw, n⃗, x⃗, q⁻, _) = sod(law, x⃗)
+function boundarystate(law::EulerLaw, n⃗, q⁻, aux⁻, bctag)
+  FT = eltype(law)
+  bctag == 1 ? sod(law, SVector(FT(0))) : sod(law, SVector(FT(1))), aux⁻
+end
 
 function run(A, FT, N, K; volume_form=WeakForm())
   Nq = N + 1

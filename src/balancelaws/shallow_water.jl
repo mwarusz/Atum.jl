@@ -28,7 +28,7 @@ module ShallowWater
     @inbounds q[ix_ρ], q[ix_ρu⃗], q[ix_ρθ]
   end
 
-  function Atum.flux(law::ShallowWaterLaw, q, x⃗)
+  function Atum.flux(law::ShallowWaterLaw, q, aux)
     ρ, ρu⃗, ρθ = unpackstate(law, q)
 
     u⃗ = ρu⃗ / ρ
@@ -41,17 +41,17 @@ module ShallowWater
     hcat(fρ, fρu⃗, fρθ)
   end
 
-  function Atum.wavespeed(law::ShallowWaterLaw, n⃗, q, x⃗)
+  function Atum.wavespeed(law::ShallowWaterLaw, n⃗, q, aux)
     ρ, ρu⃗, ρe = unpackstate(law, q)
 
     u⃗ = ρu⃗ / ρ
     abs(n⃗' * u⃗) + sqrt(grav(law) * ρ)
   end
 
-  function Atum.surfaceflux(::Atum.RoeFlux, law::ShallowWaterLaw, n⃗, x⃗, q⁻, q⁺)
+  function Atum.surfaceflux(::Atum.RoeFlux, law::ShallowWaterLaw, n⃗, q⁻, aux⁻, q⁺, aux⁺)
     g = grav(law)
-    f⁻ = Atum.flux(law, q⁻, x⃗)
-    f⁺ = Atum.flux(law, q⁺, x⃗)
+    f⁻ = Atum.flux(law, q⁻, aux⁻)
+    f⁺ = Atum.flux(law, q⁺, aux⁺)
 
     ρ⁻, ρu⃗⁻, ρθ⁻ = unpackstate(law, q⁻)
     u⃗⁻ = ρu⃗⁻ / ρ⁻

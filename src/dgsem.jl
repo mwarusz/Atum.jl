@@ -9,13 +9,14 @@ struct FluxDifferencingForm{VNF} <: AbstractVolumeForm
   volume_numericalflux::VNF
 end
 
-struct DGSEM{L, C, G, A1, A2, A3, VF, SNF}
+struct DGSEM{L, C, G, A1, A2, A3, A4, VF, SNF}
   law::L
   cell::C
   grid::G
   MJ::A1
   MJI::A2
   faceMJ::A3
+  auxstate::A4
   volume_form::VF
   surface_numericalflux::SNF
 
@@ -31,7 +32,9 @@ struct DGSEM{L, C, G, A1, A2, A3, VF, SNF}
 
     faceMJ = faceM * faceJ
 
-    args = (law, cell, grid, MJ, MJI, faceMJ,
+    auxstate = auxiliary.(Ref(law), points(grid))
+
+    args = (law, cell, grid, MJ, MJI, faceMJ, auxstate,
             volume_form, surface_numericalflux)
     new{typeof.(args)...}(args...)
   end
@@ -70,7 +73,7 @@ function (dg::DGSEM)(dq, q, time)
     dg.faceMJ,
     facenormal,
     boundaryfaces(grid),
-    points(grid),
+    dg.auxstate,
     Val(dim);
     ndrange,
     dependencies = comp_stream
@@ -93,7 +96,7 @@ function launch_volumeterm(::WeakForm, dq, q, dg; dependencies)
     metrics(dg.grid),
     dg.MJ,
     dg.MJI,
-    points(dg.grid),
+    dg.auxstate,
     Val(dim),
     Val(Nq),
     Val(numberofstates(dg.law));
@@ -108,6 +111,7 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; dependencies)
   device = getdevice(dg)
   Nq = size(dg.cell)[1]
   dim = ndims(dg.cell)
+  Naux = eltype(eltype(dg.auxstate)) === Nothing ? 0 : length(eltype(dg.auxstate))
 
   kernel_type = :per_dir
   if kernel_type == :naive
@@ -122,10 +126,11 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; dependencies)
       metrics(dg.grid),
       dg.MJ,
       dg.MJI,
-      points(dg.grid),
+      dg.auxstate,
       Val(dim),
       Val(Nq),
-      Val(numberofstates(dg.law));
+      Val(numberofstates(dg.law)),
+      Val(Naux);
       ndrange,
       dependencies
     )
@@ -142,12 +147,13 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; dependencies)
         metrics(dg.grid),
         dg.MJ,
         dg.MJI,
-        points(dg.grid),
+        dg.auxstate,
         dir == 1, # add_source
         Val(dir),
         Val(dim),
         Val(Nq),
-        Val(numberofstates(dg.law));
+        Val(numberofstates(dg.law)),
+        Val(Naux);
         ndrange,
         dependencies
       )
@@ -166,7 +172,7 @@ end
                              metrics,
                              MJ,
                              MJI,
-                             points,
+                             auxstate,
                              ::Val{dim},
                              ::Val{Nq},
                              ::Val{Ns}) where {dim, Nq, Ns}
@@ -190,10 +196,10 @@ end
     g = metrics[ijk, e].g
 
     qijk = q[ijk, e]
-    x⃗ijk = points[ijk, e]
+    auxijk = auxstate[ijk, e]
     MJijk = MJ[ijk, e]
 
-    fijk = flux(law, qijk, x⃗ijk)
+    fijk = flux(law, qijk, auxijk)
 
     @unroll for s in 1:Ns
       @unroll for d in 1:dim
@@ -209,8 +215,8 @@ end
     end
 
     fill!(dqijk, -zero(FT))
-    source!(law, dqijk, qijk, x⃗ijk)
-    nonconservative_term!(law, dqijk, qijk, x⃗ijk)
+    source!(law, dqijk, qijk, auxijk)
+    nonconservative_term!(law, dqijk, qijk, auxijk)
 
     @synchronize
 
@@ -244,10 +250,11 @@ end
                                metrics,
                                MJ,
                                MJI,
-                               points,
+                               auxstate,
                                ::Val{dim},
                                ::Val{Nq},
-                               ::Val{Ns}) where {dim, Nq, Ns}
+                               ::Val{Ns},
+                               ::Val{Naux}) where {dim, Nq, Ns, Naux}
   @uniform begin
     FT = eltype(law)
     Nq1 = Nq
@@ -256,19 +263,19 @@ end
 
     q1 = MVector{Ns, FT}(undef)
     q2 = MVector{Ns, FT}(undef)
-    x⃗1 = MVector{dim, FT}(undef)
-    x⃗2 = MVector{dim, FT}(undef)
+    aux1 = MVector{Naux, FT}(undef)
+    aux2 = MVector{Naux, FT}(undef)
   end
 
   dqijk = @private FT (Ns,)
 
   pencil_q = @private FT (Ns, Nq3)
-  pencil_x⃗ = @private FT (dim, Nq3)
+  pencil_aux = @private FT (Naux, Nq3)
   pencil_g3 = @private FT (3, Nq3)
   pencil_MJ = @private FT (Nq3,)
 
   l_q = @localmem FT (Nq1, Nq2, Ns)
-  l_x⃗ = @localmem FT (Nq1, Nq2, dim)
+  l_aux = @localmem FT (Nq1, Nq2, dim)
   l_g = @localmem FT (Nq1, Nq2, min(2, dim), dim)
 
   e = @index(Group, Linear)
@@ -283,7 +290,7 @@ end
         pencil_q[s, k] = q[ijk, e][s]
       end
       @unroll for d in 1:dim
-        pencil_x⃗[d, k] = points[ijk, e][d]
+        pencil_aux[d, k] = aux[ijk, e][d]
       end
       if dim > 2
         @unroll for d in 1:dim
@@ -300,8 +307,8 @@ end
       @unroll for s in 1:Ns
         l_q[i, j, s] = pencil_q[s, k]
       end
-      @unroll for d in 1:dim
-        l_x⃗[i, j, d] = pencil_x⃗[d, k]
+      @unroll for s in 1:Naux
+        l_aux[i, j, s] = pencil_aux[s, k]
       end
 
       MJk = pencil_MJ[k]
@@ -319,22 +326,22 @@ end
       @unroll for s in 1:Ns
         q1[s] = l_q[i, j, s]
       end
-      @unroll for d in 1:dim
-        x⃗1[d] = l_x⃗[i, j, d]
+      @unroll for s in 1:Naux
+        aux1[s] = l_aux[i, j, s]
       end
 
-      source!(law, dqijk, q1, x⃗1)
+      source!(law, dqijk, q1, aux1)
 
       MJIijk = 1 / pencil_MJ[k]
       @unroll for n in 1:Nq
         @unroll for s in 1:Ns
           q2[s] = l_q[n, j, s]
         end
-        @unroll for d in 1:dim
-          x⃗2[d] = l_x⃗[n, j, d]
+        @unroll for s in 1:Naux
+          aux2[s] = l_aux[n, j, s]
         end
 
-        f = twopointflux(volume_numericalflux, law, q1, x⃗1, q2, x⃗2)
+        f = twopointflux(volume_numericalflux, law, q1, aux1, q2, aux2)
         @unroll for s in 1:Ns
           Din = MJIijk * D[i, n]
           Dni = MJIijk * D[n, i]
@@ -348,10 +355,10 @@ end
           @unroll for s in 1:Ns
             q2[s] = l_q[i, n, s]
           end
-          @unroll for d in 1:dim
-            x⃗2[d] = l_x⃗[i, n, d]
+          @unroll for s in 1:Naux
+            aux2[s] = l_aux[i, n, s]
           end
-          f = twopointflux(volume_numericalflux, law, q1, x⃗1, q2, x⃗2)
+          f = twopointflux(volume_numericalflux, law, q1, aux1, q2, aux2)
           @unroll for s in 1:Ns
             Djn = MJIijk * D[j, n]
             Dnj = MJIijk * D[n, j]
@@ -366,10 +373,10 @@ end
           @unroll for s in 1:Ns
             q2[s] = pencil_q[s, n]
           end
-          @unroll for d in 1:dim
-            x⃗2[d] = pencil_x⃗[d, n]
+          @unroll for s in 1:Naux
+            aux2[s] = pencil_aux[s, n]
           end
-          f = twopointflux(volume_numericalflux, law, q1, x⃗1, q2, x⃗2)
+          f = twopointflux(volume_numericalflux, law, q1, aux1, q2, aux2)
           @unroll for s in 1:Ns
             Dkn = MJIijk * D[k, n]
             Dnk = MJIijk * D[n, k]
@@ -395,12 +402,13 @@ end
                                    metrics,
                                    MJ,
                                    MJI,
-                                   points,
+                                   auxstate,
                                    add_source,
                                    ::Val{dir},
                                    ::Val{dim},
                                    ::Val{Nq},
-                                   ::Val{Ns}) where {dir, dim, Nq, Ns}
+                                   ::Val{Ns},
+                                   ::Val{Naux}) where {dir, dim, Nq, Ns, Naux}
   @uniform begin
     FT = eltype(law)
     Nq1 = Nq
@@ -411,7 +419,7 @@ end
   dqijk = @private FT (Ns,)
 
   q1 = @private FT (Ns,)
-  x⃗1 = @private FT (dim,)
+  aux1 = @private FT (Naux,)
 
   l_g = @localmem FT (Nq ^ 3, 3)
 
@@ -431,11 +439,11 @@ end
     @unroll for s in 1:Ns
       q1[s] = q[ijk, e][s]
     end
-    @unroll for d in 1:dim
-      x⃗1[d] = points[ijk, e][d]
+    @unroll for s in 1:Naux
+      aux1[s] = auxstate[ijk, e][s]
     end
 
-    add_source && source!(law, dqijk, q1, x⃗1)
+    add_source && source!(law, dqijk, q1, aux1)
 
     @synchronize
 
@@ -455,9 +463,9 @@ end
       end
 
       q2 = q[ild, e]
-      x⃗2 = points[ild, e]
+      aux2 = auxstate[ild, e]
 
-      f = twopointflux(volume_numericalflux, law, q1, x⃗1, q2, x⃗2)
+      f = twopointflux(volume_numericalflux, law, q1, aux1, q2, aux2)
       @unroll for s in 1:Ns
         Ddn = MJIijk * D[id, n]
         Dnd = MJIijk * D[n, id]
@@ -483,7 +491,7 @@ end
                               faceMJ,
                               facenormal,
                               boundaryfaces,
-                              points,
+                              auxstate,
                               ::Val{dim}) where {faceoffsets, dim}
   @uniform begin
     FT = eltype(q)
@@ -501,18 +509,19 @@ end
         n⃗ = facenormal[j, e⁻]
         fMJ = faceMJ[j, e⁻]
 
-        x⃗⁻ = points[id⁻]
+        aux⁻ = auxstate[id⁻]
         q⁻ = q[id⁻]
 
         boundarytag = boundaryfaces[face, e⁻]
         if boundarytag == 0
           id⁺ = faceix⁺[j, e⁻]
           q⁺ = q[id⁺]
+          aux⁺ = auxstate[id⁺]
         else
-          q⁺ = boundarystate(law, n⃗, x⃗⁻, q⁻, boundarytag)
+          q⁺, aux⁺ = boundarystate(law, n⃗, q⁻, aux⁻, boundarytag)
         end
 
-        nf = surfaceflux(numericalflux, law, n⃗, x⃗⁻, q⁻, q⁺)
+        nf = surfaceflux(numericalflux, law, n⃗, q⁻, aux⁻, q⁺, aux⁺)
         dq[id⁻] -= fMJ * nf * MJI[id⁻]
 
         @synchronize(mod(face, 2) == 0)

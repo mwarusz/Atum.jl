@@ -7,11 +7,32 @@ using StaticArrays: SVector
 using WriteVTK
 
 import Atum: boundarystate
-function boundarystate(law::EulerGravityLaw, n⃗, x⃗, q⁻, _)
+function boundarystate(law::EulerGravityLaw, n⃗, q⁻, aux⁻, _)
   ρ⁻, ρu⃗⁻, ρe⁻ = EulerGravity.unpackstate(law, q⁻)
   ρ⁺, ρe⁺ = ρ⁻, ρe⁻
   ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
-  SVector(ρ⁺, ρu⃗⁺..., ρe⁺)
+  SVector(ρ⁺, ρu⃗⁺..., ρe⁺), aux⁻
+end
+
+import Atum.EulerGravity: referencestate
+function referencestate(law::EulerGravityLaw, x⃗)
+  FT = eltype(law)
+  x, z = x⃗
+
+  cv_d = FT(719)
+  cp_d = γ(law) * cv_d
+  R_d = cp_d - cv_d
+
+  p_s = FT(1e5)
+  T_ref = FT(250)
+
+  δ = grav(law) / (R_d * T_ref)
+  ρ_s = p_s / (T_ref * R_d)
+  ρ_ref = ρ_s * exp(-δ * z)
+
+  p_ref = ρ_ref * R_d * T_ref
+
+  SVector(ρ_ref, p_ref)
 end
 
 function gravitywave(law, x⃗, t, add_perturbation=true)
@@ -132,7 +153,7 @@ end
 function run(A, FT, N, KX, KY; volume_form=WeakForm(), outputvtk=true)
   Nq = N + 1
 
-  law = EulerGravityLaw{FT, 2}()
+  law = EulerGravityLaw{FT, 2}(pde_level_balance=true)
   
   cell = LobattoCell{FT, A}(Nq, Nq)
   vx = range(FT(0), stop=FT(300e3), length=KX+1)

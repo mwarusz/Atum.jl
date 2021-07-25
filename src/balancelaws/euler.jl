@@ -54,16 +54,16 @@ module Euler
     hcat(fρ, fρu⃗, fρe)
   end
 
-  function Atum.wavespeed(law::EulerLaw, n⃗, q, x⃗)
+  function Atum.wavespeed(law::EulerLaw, n⃗, q, aux)
     ρ, ρu⃗, ρe = unpackstate(law, q)
 
     u⃗ = ρu⃗ / ρ
     abs(n⃗' * u⃗) + soundspeed(law, ρ, ρu⃗, ρe)
   end
 
-  function Atum.surfaceflux(::Atum.RoeFlux, law::EulerLaw, n⃗, x⃗, q⁻, q⁺)
-    f⁻ = Atum.flux(law, q⁻, x⃗)
-    f⁺ = Atum.flux(law, q⁺, x⃗)
+  function Atum.surfaceflux(::Atum.RoeFlux, law::EulerLaw, n⃗, q⁻, aux⁻, q⁺, aux⁺)
+    f⁻ = Atum.flux(law, q⁻, aux⁻)
+    f⁺ = Atum.flux(law, q⁺, aux⁺)
 
     ρ⁻, ρu⃗⁻, ρe⁻ = unpackstate(law, q⁻)
     u⃗⁻ = ρu⃗⁻ / ρ⁻
