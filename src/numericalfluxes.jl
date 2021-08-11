@@ -1,6 +1,7 @@
 export CentralFlux
 export RusanovFlux
 export EntropyConservativeFlux
+export KennedyGruberFlux
 export RoeFlux
 
 avg(s⁻, s⁺) = (s⁻ + s⁺) / 2
@@ -40,4 +41,5 @@ function surfaceflux(::RusanovFlux, law::AbstractBalanceLaw, n⃗, q⁻, aux⁻,
 end
 
 struct EntropyConservativeFlux <: AbstractNumericalFlux end
+struct KennedyGruberFlux <: AbstractNumericalFlux end
 struct RoeFlux <: AbstractNumericalFlux end

@@ -191,4 +191,37 @@ module EulerGravity
 
       hcat(fρ, fρu⃗, fρe)
   end
+
+  function Atum.twopointflux(::Atum.KennedyGruberFlux,
+                             law::EulerGravityLaw,
+                             q₁, aux₁, q₂, aux₂)
+      FT = eltype(law)
+      ρ₁, ρu⃗₁, ρe₁ = unpackstate(law, q₁)
+      ρ₂, ρu⃗₂, ρe₂ = unpackstate(law, q₂)
+
+      Φ₁ = geopotential(law, aux₁)
+      u⃗₁ = ρu⃗₁ / ρ₁
+      e₁ = ρe₁ / ρ₁
+      p₁ = pressure(law, ρ₁, ρu⃗₁, ρe₁, Φ₁)
+
+      Φ₂ = geopotential(law, aux₂)
+      u⃗₂ = ρu⃗₂ / ρ₂
+      e₂ = ρe₂ / ρ₂
+      p₂ = pressure(law, ρ₂, ρu⃗₂, ρe₂, Φ₂)
+
+      ρ_avg = avg(ρ₁, ρ₂)
+      u⃗_avg = avg(u⃗₁, u⃗₂)
+      e_avg = avg(e₁, e₂)
+      p_avg = avg(p₁, p₂)
+
+      fρ = u⃗_avg * ρ_avg
+      fρu⃗ = u⃗_avg * fρ' + p_avg * I
+      fρe = u⃗_avg * (ρ_avg * e_avg + p_avg)
+
+      # fluctuation
+      α = ρ_avg / 2
+      fρu⃗ -= α * (Φ₁ - Φ₂) * I
+
+      hcat(fρ, fρu⃗, fρe)
+  end
 end

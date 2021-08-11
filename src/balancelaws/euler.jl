@@ -139,4 +139,31 @@ module Euler
 
       hcat(fρ, fρu⃗, fρe)
   end
+
+  function Atum.twopointflux(::Atum.KennedyGruberFlux,
+                             law::EulerLaw,
+                             q₁, aux₁, q₂, aux₂)
+      FT = eltype(law)
+      ρ₁, ρu⃗₁, ρe₁ = unpackstate(law, q₁)
+      ρ₂, ρu⃗₂, ρe₂ = unpackstate(law, q₂)
+
+      u⃗₁ = ρu⃗₁ / ρ₁
+      e₁ = ρe₁ / ρ₁
+      p₁ = pressure(law, ρ₁, ρu⃗₁, ρe₁)
+
+      u⃗₂ = ρu⃗₂ / ρ₂
+      e₂ = ρe₂ / ρ₂
+      p₂ = pressure(law, ρ₂, ρu⃗₂, ρe₂)
+
+      ρ_avg = avg(ρ₁, ρ₂)
+      u⃗_avg = avg(u⃗₁, u⃗₂)
+      e_avg = avg(e₁, e₂)
+      p_avg = avg(p₁, p₂)
+
+      fρ = u⃗_avg * ρ_avg
+      fρu⃗ = u⃗_avg * fρ' + p_avg * I
+      fρe = u⃗_avg * (ρ_avg * e_avg + p_avg)
+
+      hcat(fρ, fρu⃗, fρe)
+  end
 end
