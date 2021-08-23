@@ -3,6 +3,7 @@ export RusanovFlux
 export EntropyConservativeFlux
 export KennedyGruberFlux
 export RoeFlux
+export MatrixFlux
 
 avg(s⁻, s⁺) = (s⁻ + s⁺) / 2
 function logavg(a, b)
@@ -43,3 +44,4 @@ end
 struct EntropyConservativeFlux <: AbstractNumericalFlux end
 struct KennedyGruberFlux <: AbstractNumericalFlux end
 struct RoeFlux <: AbstractNumericalFlux end
+struct MatrixFlux <: AbstractNumericalFlux end

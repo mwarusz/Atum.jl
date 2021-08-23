@@ -4,7 +4,7 @@ module EulerGravity
   import ..Atum
   using ..Atum: avg, logavg, roe_avg
   using StaticArrays
-  using LinearAlgebra: I
+  using LinearAlgebra: I, norm
 
   struct EulerGravityLaw{γ, grav, pde, FT, D, S} <: Atum.AbstractBalanceLaw{FT, D, S}
     function EulerGravityLaw{FT, D}(; γ = 7 // 5,
@@ -102,6 +102,21 @@ module EulerGravity
 
     u⃗ = ρu⃗ / ρ
     abs(n⃗' * u⃗) + soundspeed(law, ρ, ρu⃗, ρe, Φ)
+  end
+
+  function Atum.entropyvariables(law::EulerGravityLaw, q, aux)
+    ρ, ρu⃗, ρe = unpackstate(law, q)
+    Φ = geopotential(law, aux)
+    _γ = γ(law)
+    p = pressure(law, ρ, ρu⃗, ρe, Φ)
+    s = log(p / ρ ^ _γ)
+    b = ρ / 2p
+    u⃗ = ρu⃗ / ρ
+    vρ = (_γ - s) / (_γ - 1) - (u⃗' * u⃗  - 2Φ) * b
+    vρu⃗ = 2b * u⃗
+    vρe = -2b
+
+    SVector(vρ, vρu⃗..., vρe)
   end
 
   function Atum.surfaceflux(::Atum.RoeFlux, law::EulerGravityLaw, n⃗, q⁻, aux⁻, q⁺, aux⁺)
@@ -223,5 +238,68 @@ module EulerGravity
       fρu⃗ -= α * (Φ₁ - Φ₂) * I
 
       hcat(fρ, fρu⃗, fρe)
+  end
+
+  function Atum.surfaceflux(::Atum.MatrixFlux, law::EulerGravityLaw, n⃗, q⁻, aux⁻, q⁺, aux⁺)
+    FT = eltype(law)
+    _γ = γ(law)
+    ecflux = Atum.surfaceflux(Atum.EntropyConservativeFlux(), law, n⃗, q⁻, aux⁻, q⁺, aux⁺)
+
+    ρ⁻, ρu⃗⁻, ρe⁻ = unpackstate(law, q⁻)
+    Φ⁻ = geopotential(law, aux⁻)
+    u⃗⁻ = ρu⃗⁻ / ρ⁻
+    e⁻ = ρe⁻ / ρ⁻
+    p⁻ = pressure(law, ρ⁻, ρu⃗⁻, ρe⁻, Φ⁻)
+    b⁻ = ρ⁻ / 2p⁻
+
+    ρ⁺, ρu⃗⁺, ρe⁺ = unpackstate(law, q⁺)
+    Φ⁺ = geopotential(law, aux⁺)
+    u⃗⁺ = ρu⃗⁺ / ρ⁺
+    e⁺ = ρe⁺ / ρ⁺
+    p⁺ = pressure(law, ρ⁺, ρu⃗⁺, ρe⁺, Φ⁺)
+    b⁺ = ρ⁺ / 2p⁺
+
+    Φ_avg = avg(Φ⁻, Φ⁺)
+    ρ_log = logavg(ρ⁻, ρ⁺)
+    b_log = logavg(b⁻, b⁺)
+    u⃗_avg = avg(u⃗⁻, u⃗⁺)
+    p_avg = avg(ρ⁻, ρ⁺) / 2avg(b⁻, b⁺)
+    u²_bar = 2 * norm(u⃗_avg) - avg(norm(u⃗⁻), norm(u⃗⁺))
+    h_bar = _γ / (2 * b_log * (_γ - 1)) + u²_bar / 2 + Φ_avg
+    c_bar = sqrt(_γ * p_avg / ρ_log)
+
+    u⃗mc = u⃗_avg - c_bar * n⃗
+    u⃗pc = u⃗_avg + c_bar * n⃗
+    u_avgᵀn = u⃗_avg' * n⃗
+
+    v⁻ = entropyvariables(law, q⁻, aux⁻)
+    v⁺ = entropyvariables(law, q⁺, aux⁺)
+    Δv = v⁺ - v⁻
+
+    λ1 = abs(u_avgᵀn - c_bar) * ρ_log / 2_γ
+    λ2 = abs(u_avgᵀn) * ρ_log * (_γ - 1) / _γ
+    λ3 = abs(u_avgᵀn + c_bar) * ρ_log / 2_γ
+    λ4 = abs(u_avgᵀn) * p_avg
+
+    Δv_ρ, Δv_ρu⃗, Δv_ρe = unpackstate(law, Δv)
+    u⃗ₜ = u⃗_avg - u_avgᵀn * n⃗
+
+    w1 = λ1 * (Δv_ρ + u⃗mc' * Δv_ρu⃗ + (h_bar - c_bar * u_avgᵀn) * Δv_ρe)
+    w2 = λ2 * (Δv_ρ + u⃗_avg' * Δv_ρu⃗ + (u²_bar / 2 + Φ_avg) * Δv_ρe)
+    w3 = λ3 * (Δv_ρ + u⃗pc' * Δv_ρu⃗ + (h_bar + c_bar * u_avgᵀn) * Δv_ρe)
+
+    Dρ = w1 + w2 + w3
+
+    Dρu⃗ = (w1 * u⃗mc +
+           w2 * u⃗_avg +
+           w3 * u⃗pc +
+           λ4 * (Δv_ρu⃗ - n⃗' * (Δv_ρu⃗) * n⃗ + Δv_ρe * u⃗ₜ))
+
+    Dρe = (w1 * (h_bar - c_bar * u_avgᵀn) +
+           w2 * (u²_bar / 2 + Φ_avg) +
+           w3 * (h_bar + c_bar * u_avgᵀn) +
+           λ4 * (u⃗ₜ' * Δv_ρu⃗ + Δv_ρe * (u⃗_avg' * u⃗_avg - u_avgᵀn ^ 2)))
+
+    ecflux - SVector(Dρ, Dρu⃗..., Dρe) / 2
   end
 end

@@ -13,3 +13,5 @@ function wavespeed end
 boundarystate(::AbstractBalanceLaw, n⃗, q⁻, aux⁻, tag) = q⁻, aux⁻
 source!(::AbstractBalanceLaw, dq, q, aux) = nothing
 nonconservative_term!(::AbstractBalanceLaw, dq, q, aux) = nothing
+
+function entropyvariables end
