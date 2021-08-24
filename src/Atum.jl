@@ -19,5 +19,6 @@ include("balancelaws/advection.jl")
 include("balancelaws/shallow_water.jl")
 include("balancelaws/euler.jl")
 include("balancelaws/euler_gravity.jl")
+include("balancelaws/euler_theta_gravity.jl")
 
 end # module
