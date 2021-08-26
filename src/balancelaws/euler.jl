@@ -210,8 +210,8 @@ module Euler
     u⃗pc = u⃗_avg + c_bar * n⃗
     u_avgᵀn = u⃗_avg' * n⃗
 
-    v⁻ = entropyvariables(law, q⁻, aux⁻)
-    v⁺ = entropyvariables(law, q⁺, aux⁺)
+    v⁻ = Atum.entropyvariables(law, q⁻, aux⁻)
+    v⁺ = Atum.entropyvariables(law, q⁺, aux⁺)
     Δv = v⁺ - v⁻
 
     λ1 = abs(u_avgᵀn - c_bar) * ρ_log / 2_γ
