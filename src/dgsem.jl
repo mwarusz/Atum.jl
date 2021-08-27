@@ -137,6 +137,7 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; dependencies)
   elseif kernel_type == :per_dir
     workgroup = ntuple(i -> i <= dim ? Nq : 1, 3)
     ndrange = (length(dg.grid) * workgroup[1], Base.tail(workgroup)...)
+    comp_stream = dependencies
     for dir in 1:dim
       comp_stream = esvolumeterm_dir!(device, workgroup)(
         dg.law,
@@ -155,7 +156,7 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; dependencies)
         Val(numberofstates(dg.law)),
         Val(Naux);
         ndrange,
-        dependencies
+        dependencies = comp_stream
       )
     end
   else
