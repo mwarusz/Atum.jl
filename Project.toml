@@ -4,6 +4,7 @@ authors = ["Maciej Waruszewski <mwarusz@igf.fuw.edu.pl>"]
 version = "0.1.0"
 
 [deps]
+Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 Bennu = "a1f7094c-8d14-434f-a772-7144e1a1c6c0"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 CUDAKernels = "72cfdca4-0801-4ab0-bf6a-d52aa10adc57"

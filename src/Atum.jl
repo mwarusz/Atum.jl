@@ -4,6 +4,7 @@ using Reexport
 using StaticArrays
 @reexport using Bennu
 
+using Adapt
 using KernelAbstractions
 using KernelAbstractions.Extras: @unroll
 using CUDAKernels

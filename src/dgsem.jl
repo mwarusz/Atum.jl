@@ -20,24 +20,31 @@ struct DGSEM{L, C, G, A1, A2, A3, A4, VF, SNF}
   volume_form::VF
   surface_numericalflux::SNF
 
-  function DGSEM(; law, cell, grid, surface_numericalflux,
-                   volume_form = WeakForm())
-    M = mass(cell)
-    _, J = components(metrics(grid))
-    MJ = M * J
-    MJI = 1 ./ MJ
+end
 
-    faceM = facemass(cell)
-    _, faceJ = components(facemetrics(grid))
+function Adapt.adapt_structure(to, dg::DGSEM)
+  names = fieldnames(DGSEM)
+  args = ntuple(j->adapt(to, getfield(dg, names[j])), length(names))
+  DGSEM{typeof.(args)...}(args...)
+end
 
-    faceMJ = faceM * faceJ
+function DGSEM(; law, cell, grid, surface_numericalflux,
+                 volume_form = WeakForm())
+  M = mass(cell)
+  _, J = components(metrics(grid))
+  MJ = M * J
+  MJI = 1 ./ MJ
 
-    auxstate = auxiliary.(Ref(law), points(grid))
+  faceM = facemass(cell)
+  _, faceJ = components(facemetrics(grid))
 
-    args = (law, cell, grid, MJ, MJI, faceMJ, auxstate,
-            volume_form, surface_numericalflux)
-    new{typeof.(args)...}(args...)
-  end
+  faceMJ = faceM * faceJ
+
+  auxstate = auxiliary.(Ref(law), points(grid))
+
+  args = (law, cell, grid, MJ, MJI, faceMJ, auxstate,
+          volume_form, surface_numericalflux)
+  DGSEM{typeof.(args)...}(args...)
 end
 getdevice(dg::DGSEM) = Bennu.device(arraytype(dg.cell))
 
