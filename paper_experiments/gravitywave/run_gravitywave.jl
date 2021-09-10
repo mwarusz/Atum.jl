@@ -20,7 +20,7 @@ function run(A, FT, N, KX, KY;
   vz = range(FT(0), stop=FT(_H), length=KY+1)
   grid = brickgrid(cell, (vx, vz); periodic = (true, false))
 
-  dg = DGSEM(; law, cell, grid, volume_form,
+  dg = DGSEM(; law, grid, volume_form,
                surface_numericalflux = surface_flux)
 
   cfl = FT(1 // 3)
