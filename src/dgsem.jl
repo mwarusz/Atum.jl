@@ -9,9 +9,8 @@ struct FluxDifferencingForm{VNF} <: AbstractVolumeForm
   volume_numericalflux::VNF
 end
 
-struct DGSEM{L, C, G, A1, A2, A3, A4, VF, SNF}
+struct DGSEM{L, G, A1, A2, A3, A4, VF, SNF}
   law::L
-  cell::C
   grid::G
   MJ::A1
   MJI::A2
@@ -19,8 +18,9 @@ struct DGSEM{L, C, G, A1, A2, A3, A4, VF, SNF}
   auxstate::A4
   volume_form::VF
   surface_numericalflux::SNF
-
 end
+
+Bennu.referencecell(dg::DGSEM) = referencecell(dg.grid)
 
 function Adapt.adapt_structure(to, dg::DGSEM)
   names = fieldnames(DGSEM)
@@ -28,8 +28,9 @@ function Adapt.adapt_structure(to, dg::DGSEM)
   DGSEM{typeof.(args)...}(args...)
 end
 
-function DGSEM(; law, cell, grid, surface_numericalflux,
+function DGSEM(; law, grid, surface_numericalflux,
                  volume_form = WeakForm())
+  cell = referencecell(grid)
   M = mass(cell)
   _, J = components(metrics(grid))
   MJ = M * J
@@ -42,14 +43,14 @@ function DGSEM(; law, cell, grid, surface_numericalflux,
 
   auxstate = auxiliary.(Ref(law), points(grid))
 
-  args = (law, cell, grid, MJ, MJI, faceMJ, auxstate,
+  args = (law, grid, MJ, MJI, faceMJ, auxstate,
           volume_form, surface_numericalflux)
   DGSEM{typeof.(args)...}(args...)
 end
-getdevice(dg::DGSEM) = Bennu.device(arraytype(dg.cell))
+getdevice(dg::DGSEM) = Bennu.device(arraytype(referencecell(dg)))
 
 function (dg::DGSEM)(dq, q, time)
-  cell = dg.cell
+  cell = referencecell(dg)
   grid = dg.grid
   device = getdevice(dg)
   dim = ndims(cell)
@@ -91,15 +92,16 @@ end
 
 function launch_volumeterm(::WeakForm, dq, q, dg; dependencies)
   device = getdevice(dg)
-  Nq = size(dg.cell)[1]
-  dim = ndims(dg.cell)
+  cell = referencecell(dg)
+  Nq = size(cell)[1]
+  dim = ndims(cell)
   workgroup = ntuple(i -> i <= dim ? Nq : 1, 3)
   ndrange = (length(dg.grid) * workgroup[1], Base.tail(workgroup)...)
   comp_stream = volumeterm!(device, workgroup)(
     dg.law,
     dq,
     q,
-    derivatives_1d(dg.cell)[1],
+    derivatives_1d(cell)[1],
     metrics(dg.grid),
     dg.MJ,
     dg.MJI,
@@ -115,9 +117,10 @@ function launch_volumeterm(::WeakForm, dq, q, dg; dependencies)
 end
 
 function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; dependencies)
+  cell = referencecell(dg)
   device = getdevice(dg)
-  Nq = size(dg.cell)[1]
-  dim = ndims(dg.cell)
+  Nq = size(cell)[1]
+  dim = ndims(cell)
   Naux = eltype(eltype(dg.auxstate)) === Nothing ? 0 : length(eltype(dg.auxstate))
 
   kernel_type = :per_dir
@@ -128,7 +131,7 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; dependencies)
       dg.law,
       dq,
       q,
-      derivatives_1d(dg.cell)[1],
+      derivatives_1d(cell)[1],
       form.volume_numericalflux,
       metrics(dg.grid),
       dg.MJ,
@@ -150,7 +153,7 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; dependencies)
         dg.law,
         dq,
         q,
-        derivatives_1d(dg.cell)[1],
+        derivatives_1d(cell)[1],
         form.volume_numericalflux,
         metrics(dg.grid),
         dg.MJ,

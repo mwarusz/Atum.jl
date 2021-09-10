@@ -160,7 +160,7 @@ function run(A, FT, N, KX, KY; volume_form=WeakForm(), outputvtk=true)
   vz = range(FT(0), stop=FT(10e3), length=KY+1)
   grid = brickgrid(cell, (vx, vz); periodic = (true, false))
 
-  dg = DGSEM(; law, cell, grid, volume_form,
+  dg = DGSEM(; law, grid, volume_form,
                surface_numericalflux = RoeFlux())
 
   cfl = FT(1 // 3)
