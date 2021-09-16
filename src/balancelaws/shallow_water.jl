@@ -1,19 +1,18 @@
 module ShallowWater
-  export ShallowWaterLaw, grav
+  export ShallowWaterLaw
 
   import ..Atum
-  using ..Atum: avg, roe_avg
+  using ..Atum: avg, roe_avg, constants
   using StaticArrays
   using LinearAlgebra: I
 
-  struct ShallowWaterLaw{grav, FT, D, S} <: Atum.AbstractBalanceLaw{FT, D, S}
+  struct ShallowWaterLaw{FT, D, S, C} <: Atum.AbstractBalanceLaw{FT, D, S, C}
     function ShallowWaterLaw{FT, D}(; grav = 10) where {FT, D}
       S = 2 + D
-      new{FT(grav), FT, D, S}()
+      C = (grav = FT(grav),)
+      new{FT, D, S, C}()
     end
   end
-
-  grav(::ShallowWaterLaw{_grav}) where {_grav} = _grav
 
   function varsindices(law::ShallowWaterLaw)
     S = Atum.numberofstates(law)
@@ -32,7 +31,7 @@ module ShallowWater
     ρ, ρu⃗, ρθ = unpackstate(law, q)
 
     u⃗ = ρu⃗ / ρ
-    p = grav(law) * ρ ^ 2 / 2
+    p = constants(law).grav * ρ ^ 2 / 2
 
     fρ = ρu⃗
     fρu⃗ = ρu⃗ * u⃗' + p * I
@@ -45,11 +44,11 @@ module ShallowWater
     ρ, ρu⃗, ρe = unpackstate(law, q)
 
     u⃗ = ρu⃗ / ρ
-    abs(n⃗' * u⃗) + sqrt(grav(law) * ρ)
+    abs(n⃗' * u⃗) + sqrt(constants(law).grav * ρ)
   end
 
   function Atum.surfaceflux(::Atum.RoeFlux, law::ShallowWaterLaw, n⃗, q⁻, aux⁻, q⁺, aux⁺)
-    g = grav(law)
+    g = constants(law).grav
     f⁻ = Atum.flux(law, q⁻, aux⁻)
     f⁺ = Atum.flux(law, q⁺, aux⁺)
 
@@ -112,7 +111,7 @@ module ShallowWater
       θ_avg = avg(θ₁, θ₂)
 
       fρ = ρu⃗_avg
-      fρu⃗ = ρu⃗_avg * u⃗_avg' + grav(law) * (ρ_avg ^ 2 - ρ²_avg / 2) * I
+      fρu⃗ = ρu⃗_avg * u⃗_avg' + constants(law).grav * (ρ_avg ^ 2 - ρ²_avg / 2) * I
       fρθ = ρu⃗_avg * θ_avg
 
       hcat(fρ, fρu⃗, fρθ)

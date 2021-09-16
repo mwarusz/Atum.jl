@@ -14,7 +14,7 @@ if !@isdefined integration_testing
 end
 
 function wave(law, x⃗, t)
-  ρ = 2 + sin(π * (sum(x⃗) - sum(law.u⃗) * t))
+  ρ = 2 + sin(π * (sum(x⃗) - sum(constants(law).u⃗) * t))
   SVector(ρ)
 end
 
@@ -31,7 +31,7 @@ function run(A, FT, N, K; volume_form=WeakForm())
                surface_numericalflux = RusanovFlux())
 
   cfl = FT(1 // 2)
-  dt = cfl * step(v1d) / N / norm(law.u⃗)
+  dt = cfl * step(v1d) / N / norm(constants(law).u⃗)
   timeend = FT(0.7)
   
   q = wave.(Ref(law), points(grid), FT(0))

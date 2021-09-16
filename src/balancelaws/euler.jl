@@ -1,19 +1,18 @@
 module Euler
-  export EulerLaw, γ
+  export EulerLaw
 
   import ..Atum
-  using ..Atum: avg, logavg, roe_avg
+  using ..Atum: avg, logavg, roe_avg, constants
   using StaticArrays
   using LinearAlgebra: I, norm, cross
 
-  struct EulerLaw{γ, FT, D, S} <: Atum.AbstractBalanceLaw{FT, D, S}
+  struct EulerLaw{FT, D, S, C} <: Atum.AbstractBalanceLaw{FT, D, S, C}
     function EulerLaw{FT, D}(; γ = 7 // 5) where {FT, D}
       S = 2 + D
-      new{FT(γ), FT, D, S}()
+      C = (γ = FT(γ),)
+      new{FT, D, S, C}()
     end
   end
-
-  γ(::EulerLaw{_γ}) where {_γ} = _γ
 
   function varsindices(law::EulerLaw)
     S = Atum.numberofstates(law)
@@ -29,13 +28,16 @@ module Euler
   end
 
   function pressure(law::EulerLaw, ρ, ρu⃗, ρe)
-    (γ(law) - 1) * (ρe - ρu⃗' * ρu⃗ / 2ρ)
+    γ = constants(law).γ
+    (γ - 1) * (ρe - ρu⃗' * ρu⃗ / 2ρ)
   end
   function energy(law::EulerLaw, ρ, ρu⃗, p)
-    p / (γ(law) - 1) + ρu⃗' * ρu⃗ / 2ρ
+    γ = constants(law).γ
+    p / (γ - 1) + ρu⃗' * ρu⃗ / 2ρ
   end
   function soundspeed(law::EulerLaw, ρ, p)
-    sqrt(γ(law) * p / ρ)
+    γ = constants(law).γ
+    sqrt(γ * p / ρ)
   end
   function soundspeed(law::EulerLaw, ρ, ρu⃗, ρe)
     soundspeed(law, ρ, pressure(law, ρ, ρu⃗, ρe))
@@ -63,12 +65,12 @@ module Euler
 
   function Atum.entropyvariables(law::EulerLaw, q, aux)
     ρ, ρu⃗, ρe = unpackstate(law, q)
-    _γ = γ(law)
+    γ = constants(law).γ
     p = pressure(law, ρ, ρu⃗, ρe)
-    s = log(p / ρ ^ _γ)
+    s = log(p / ρ ^ γ)
     b = ρ / 2p
     u⃗ = ρu⃗ / ρ
-    vρ = (_γ - s) / (_γ - 1) - u⃗' * u⃗ * b
+    vρ = (γ - s) / (γ - 1) - u⃗' * u⃗ * b
     vρu⃗ = 2b * u⃗
     vρe = -2b
 
@@ -128,6 +130,7 @@ module Euler
                              law::EulerLaw,
                              q₁, _, q₂, _)
       FT = eltype(law)
+      γ = constants(law).γ
       ρ₁, ρu⃗₁, ρe₁ = unpackstate(law, q₁)
       ρ₂, ρu⃗₂, ρe₂ = unpackstate(law, q₂)
 
@@ -149,7 +152,7 @@ module Euler
 
       fρ = u⃗_avg * ρ_log
       fρu⃗ = u⃗_avg * fρ' + ρ_avg / 2b_avg * I
-      fρe = (1 / (2 * (γ(law) - 1) * b_log) - u²_avg / 2) * fρ + fρu⃗ * u⃗_avg
+      fρe = (1 / (2 * (γ - 1) * b_log) - u²_avg / 2) * fρ + fρu⃗ * u⃗_avg
 
       hcat(fρ, fρu⃗, fρe)
   end
@@ -183,7 +186,7 @@ module Euler
 
   function Atum.surfaceflux(::Atum.MatrixFlux, law::EulerLaw, n⃗, q⁻, aux⁻, q⁺, aux⁺)
     FT = eltype(law)
-    _γ = γ(law)
+    γ = constants(law).γ
     ecflux = Atum.surfaceflux(Atum.EntropyConservativeFlux(), law, n⃗, q⁻, aux⁻, q⁺, aux⁺)
 
     ρ⁻, ρu⃗⁻, ρe⁻ = unpackstate(law, q⁻)
@@ -203,8 +206,8 @@ module Euler
     u⃗_avg = avg(u⃗⁻, u⃗⁺)
     p_avg = avg(ρ⁻, ρ⁺) / 2avg(b⁻, b⁺)
     u²_bar = 2 * norm(u⃗_avg) - avg(norm(u⃗⁻), norm(u⃗⁺))
-    h_bar = _γ / (2 * b_log * (_γ - 1)) + u²_bar / 2
-    c_bar = sqrt(_γ * p_avg / ρ_log)
+    h_bar = γ / (2 * b_log * (γ - 1)) + u²_bar / 2
+    c_bar = sqrt(γ * p_avg / ρ_log)
 
     u⃗mc = u⃗_avg - c_bar * n⃗
     u⃗pc = u⃗_avg + c_bar * n⃗
@@ -214,9 +217,9 @@ module Euler
     v⁺ = Atum.entropyvariables(law, q⁺, aux⁺)
     Δv = v⁺ - v⁻
 
-    λ1 = abs(u_avgᵀn - c_bar) * ρ_log / 2_γ
-    λ2 = abs(u_avgᵀn) * ρ_log * (_γ - 1) / _γ
-    λ3 = abs(u_avgᵀn + c_bar) * ρ_log / 2_γ
+    λ1 = abs(u_avgᵀn - c_bar) * ρ_log / 2γ
+    λ2 = abs(u_avgᵀn) * ρ_log * (γ - 1) / γ
+    λ3 = abs(u_avgᵀn + c_bar) * ρ_log / 2γ
     λ4 = abs(u_avgᵀn) * p_avg
 
     Δv_ρ, Δv_ρu⃗, Δv_ρe = unpackstate(law, Δv)
