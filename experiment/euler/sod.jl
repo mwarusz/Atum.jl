@@ -28,7 +28,7 @@ function run(A, FT, N, K; volume_form=WeakForm())
   v1d = range(FT(0), stop=FT(1), length=K+1)
   grid = brickgrid(cell, (v1d,); periodic=(false,))
 
-  dg = DGSEM(; law, cell, grid, volume_form,
+  dg = DGSEM(; law, grid, volume_form,
                surface_numericalflux = RusanovFlux())
 
   cfl = FT(1 // 4)
