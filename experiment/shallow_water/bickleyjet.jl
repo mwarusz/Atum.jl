@@ -48,7 +48,7 @@ function run(A, FT, N, K; volume_form=WeakForm(), outputvtk=true)
                surface_numericalflux = RoeFlux())
 
   cfl = FT(1 // 8)
-  dt = cfl * step(v1d) / N / sqrt(grav(law))
+  dt = cfl * step(v1d) / N / sqrt(constants(law).grav)
   timeend = @isdefined(_testing) ? 10dt : FT(200)
  
   q = bickleyjet.(Ref(law), points(grid))

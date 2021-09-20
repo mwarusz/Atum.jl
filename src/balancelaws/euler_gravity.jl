@@ -1,23 +1,20 @@
 module EulerGravity
-  export EulerGravityLaw, γ, grav
+  export EulerGravityLaw
 
   import ..Atum
-  using ..Atum: avg, logavg, roe_avg
+  using ..Atum: avg, logavg, roe_avg, constants
   using StaticArrays
   using LinearAlgebra: I, norm
 
-  struct EulerGravityLaw{γ, grav, pde, FT, D, S} <: Atum.AbstractBalanceLaw{FT, D, S}
+  struct EulerGravityLaw{FT, D, S, C} <: Atum.AbstractBalanceLaw{FT, D, S, C}
     function EulerGravityLaw{FT, D}(; γ = 7 // 5,
                                       grav = 981 // 100,
                                       pde_level_balance = false) where {FT, D}
       S = 2 + D
-      new{FT(γ), FT(grav), pde_level_balance, FT, D, S}()
+      C = (γ = FT(γ), grav = FT(grav), pde_level_balance = pde_level_balance)
+      new{FT, D, S, C}()
     end
   end
-
-  γ(::EulerGravityLaw{_γ}) where {_γ} = _γ
-  grav(::EulerGravityLaw{_γ, _grav}) where {_γ, _grav} = _grav
-  pde_level_balance(::EulerGravityLaw{_γ, _grav, _pde}) where {_γ, _grav, _pde} = _pde
 
   function varsindices(law::EulerGravityLaw)
     S = Atum.numberofstates(law)
@@ -47,17 +44,20 @@ module EulerGravity
   function geopotential(law, aux)
     x⃗ = coordinates(law, aux)
     z = last(x⃗)
-    grav(law) * z
+    constants(law).grav * z
   end
 
   function pressure(law::EulerGravityLaw, ρ, ρu⃗, ρe, Φ)
-    (γ(law) - 1) * (ρe - ρu⃗' * ρu⃗ / 2ρ - ρ * Φ)
+    γ = constants(law).γ
+    (γ - 1) * (ρe - ρu⃗' * ρu⃗ / 2ρ - ρ * Φ)
   end
   function energy(law::EulerGravityLaw, ρ, ρu⃗, p, Φ)
-    p / (γ(law) - 1) + ρu⃗' * ρu⃗ / 2ρ + ρ * Φ
+    γ = constants(law).γ
+    p / (γ - 1) + ρu⃗' * ρu⃗ / 2ρ + ρ * Φ
   end
   function soundspeed(law::EulerGravityLaw, ρ, p)
-    sqrt(γ(law) * p / ρ)
+    γ = constants(law).γ
+    sqrt(γ * p / ρ)
   end
   function soundspeed(law::EulerGravityLaw, ρ, ρu⃗, ρe, Φ)
     soundspeed(law, ρ, pressure(law, ρ, ρu⃗, ρe, Φ))
@@ -72,7 +72,7 @@ module EulerGravity
     p = pressure(law, ρ, ρu⃗, ρe, Φ)
 
     δp = p
-    if pde_level_balance(law)
+    if constants(law).pde_level_balance
       δp -= reference_p(law, aux)
     end
 
@@ -88,11 +88,11 @@ module EulerGravity
 
     @inbounds ρ = q[ix_ρ]
 
-    if pde_level_balance(law)
+    if constants(law).pde_level_balance
       ρ -= reference_ρ(law, aux)
     end
 
-    @inbounds dq[ix_ρu⃗[end]] -= ρ * grav(law)
+    @inbounds dq[ix_ρu⃗[end]] -= ρ * constants(law).grav
   end
 
   function Atum.wavespeed(law::EulerGravityLaw, n⃗, q, aux)
@@ -107,12 +107,12 @@ module EulerGravity
   function Atum.entropyvariables(law::EulerGravityLaw, q, aux)
     ρ, ρu⃗, ρe = unpackstate(law, q)
     Φ = geopotential(law, aux)
-    _γ = γ(law)
+    γ = constants(law).γ
     p = pressure(law, ρ, ρu⃗, ρe, Φ)
-    s = log(p / ρ ^ _γ)
+    s = log(p / ρ ^ γ)
     b = ρ / 2p
     u⃗ = ρu⃗ / ρ
-    vρ = (_γ - s) / (_γ - 1) - (u⃗' * u⃗  - 2Φ) * b
+    vρ = (γ - s) / (γ - 1) - (u⃗' * u⃗  - 2Φ) * b
     vρu⃗ = 2b * u⃗
     vρe = -2b
 
@@ -174,6 +174,7 @@ module EulerGravity
                              law::EulerGravityLaw,
                              q₁, aux₁, q₂, aux₂)
       FT = eltype(law)
+      γ = constants(law).γ
       ρ₁, ρu⃗₁, ρe₁ = unpackstate(law, q₁)
       ρ₂, ρu⃗₂, ρe₂ = unpackstate(law, q₂)
 
@@ -198,7 +199,7 @@ module EulerGravity
 
       fρ = u⃗_avg * ρ_log
       fρu⃗ = u⃗_avg * fρ' + ρ_avg / 2b_avg * I
-      fρe = (1 / (2 * (γ(law) - 1) * b_log) - u²_avg / 2 + Φ_avg) * fρ + fρu⃗ * u⃗_avg
+      fρe = (1 / (2 * (γ - 1) * b_log) - u²_avg / 2 + Φ_avg) * fρ + fρu⃗ * u⃗_avg
 
       # fluctuation
       α = b_avg * ρ_log / 2b₁
@@ -242,7 +243,7 @@ module EulerGravity
 
   function Atum.surfaceflux(::Atum.MatrixFlux, law::EulerGravityLaw, n⃗, q⁻, aux⁻, q⁺, aux⁺)
     FT = eltype(law)
-    _γ = γ(law)
+    γ = constants(law).γ
     ecflux = Atum.surfaceflux(Atum.EntropyConservativeFlux(), law, n⃗, q⁻, aux⁻, q⁺, aux⁺)
 
     ρ⁻, ρu⃗⁻, ρe⁻ = unpackstate(law, q⁻)
@@ -265,8 +266,8 @@ module EulerGravity
     u⃗_avg = avg(u⃗⁻, u⃗⁺)
     p_avg = avg(ρ⁻, ρ⁺) / 2avg(b⁻, b⁺)
     u²_bar = 2 * norm(u⃗_avg) - avg(norm(u⃗⁻), norm(u⃗⁺))
-    h_bar = _γ / (2 * b_log * (_γ - 1)) + u²_bar / 2 + Φ_avg
-    c_bar = sqrt(_γ * p_avg / ρ_log)
+    h_bar = γ / (2 * b_log * (γ - 1)) + u²_bar / 2 + Φ_avg
+    c_bar = sqrt(γ * p_avg / ρ_log)
 
     u⃗mc = u⃗_avg - c_bar * n⃗
     u⃗pc = u⃗_avg + c_bar * n⃗
@@ -276,9 +277,9 @@ module EulerGravity
     v⁺ = Atum.entropyvariables(law, q⁺, aux⁺)
     Δv = v⁺ - v⁻
 
-    λ1 = abs(u_avgᵀn - c_bar) * ρ_log / 2_γ
-    λ2 = abs(u_avgᵀn) * ρ_log * (_γ - 1) / _γ
-    λ3 = abs(u_avgᵀn + c_bar) * ρ_log / 2_γ
+    λ1 = abs(u_avgᵀn - c_bar) * ρ_log / 2γ
+    λ2 = abs(u_avgᵀn) * ρ_log * (γ - 1) / γ
+    λ3 = abs(u_avgᵀn + c_bar) * ρ_log / 2γ
     λ4 = abs(u_avgᵀn) * p_avg
 
     Δv_ρ, Δv_ρu⃗, Δv_ρe = unpackstate(law, Δv)

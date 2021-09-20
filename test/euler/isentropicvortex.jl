@@ -15,16 +15,17 @@ end
 
 function vortex(law, x⃗, t)
   FT = eltype(law)
+  γ = constants(law).γ
   c⃗ = SVector(FT(5), FT(0))
   u⃗₀ = SVector(FT(1), FT(0))
   β = FT(5)
   r⃗ = x⃗ - c⃗ - u⃗₀ * t
   f = β * exp(1 - r⃗' * r⃗)
   
-  ρ = (1 - (γ(law) - 1) * f ^ 2 / (16 * γ(law) * π ^ 2)) ^ (1 / (γ(law) - 1))
+  ρ = (1 - (γ - 1) * f ^ 2 / (16 * γ * π ^ 2)) ^ (1 / (γ - 1))
   u⃗ = u⃗₀ + f / 2π * SVector(-r⃗[2], r⃗[1])
   ρu⃗ = ρ * u⃗
-  p = ρ ^ γ(law)
+  p = ρ ^ γ
   ρe = Euler.energy(law, ρ, ρu⃗, p)
 
   SVector(ρ, ρu⃗..., ρe)

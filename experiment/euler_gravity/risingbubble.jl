@@ -16,10 +16,10 @@ function risingbubble(law, x⃗, add_perturbation=true)
   FT = eltype(law)
   x, z = x⃗
 
-  Φ = grav(law) * z
+  Φ = constants(law).grav * z
 
   cv_d = FT(719)
-  cp_d = γ(law) * cv_d
+  cp_d = constants(law).γ * cv_d
   R_d = cp_d - cv_d
 
   θref = FT(300)
@@ -36,7 +36,7 @@ function risingbubble(law, x⃗, add_perturbation=true)
   if add_perturbation 
     θ += δθ * (1 + cos(π * r / rc)) / 2
   end
-  π_exner = 1 - grav(law) / (cp_d * θ) * z
+  π_exner = 1 - constants(law).grav / (cp_d * θ) * z
   ρ = p0 / (R_d * θ) * π_exner ^ (cv_d / R_d)
   
   ρu = FT(0)
