@@ -104,6 +104,16 @@ module EulerGravity
     abs(n⃗' * u⃗) + soundspeed(law, ρ, ρu⃗, ρe, Φ)
   end
 
+  function Atum.entropy(law::EulerGravityLaw, q, aux)
+    ρ, ρu⃗, ρe = unpackstate(law, q)
+    Φ = geopotential(law, aux)
+    γ = constants(law).γ
+    p = pressure(law, ρ, ρu⃗, ρe, Φ)
+    s = log(p / ρ ^ γ)
+
+    -ρ * s / (γ - 1)
+  end
+
   function Atum.entropyvariables(law::EulerGravityLaw, q, aux)
     ρ, ρu⃗, ρe = unpackstate(law, q)
     Φ = geopotential(law, aux)
