@@ -63,6 +63,15 @@ module Euler
     abs(n⃗' * u⃗) + soundspeed(law, ρ, ρu⃗, ρe)
   end
 
+  function Atum.entropy(law::EulerLaw, q, aux)
+    ρ, ρu⃗, ρe = unpackstate(law, q)
+    γ = constants(law).γ
+    p = pressure(law, ρ, ρu⃗, ρe)
+    s = log(p / ρ ^ γ)
+
+    -ρ * s / (γ - 1)
+  end
+
   function Atum.entropyvariables(law::EulerLaw, q, aux)
     ρ, ρu⃗, ρe = unpackstate(law, q)
     γ = constants(law).γ

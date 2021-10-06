@@ -41,10 +41,16 @@ module ShallowWater
   end
 
   function Atum.wavespeed(law::ShallowWaterLaw, n⃗, q, aux)
-    ρ, ρu⃗, ρe = unpackstate(law, q)
+    ρ, ρu⃗, ρθ = unpackstate(law, q)
 
     u⃗ = ρu⃗ / ρ
     abs(n⃗' * u⃗) + sqrt(constants(law).grav * ρ)
+  end
+
+  function Atum.entropy(law::ShallowWaterLaw, q, aux)
+    ρ, ρu⃗, ρθ = unpackstate(law, q)
+    grav = constants(law).grav
+    ρu⃗' * ρu⃗ / 2ρ + grav * ρ ^ 2 / 2
   end
 
   function Atum.surfaceflux(::Atum.RoeFlux, law::ShallowWaterLaw, n⃗, q⁻, aux⁻, q⁺, aux⁺)
