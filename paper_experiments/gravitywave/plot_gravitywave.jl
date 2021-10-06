@@ -16,7 +16,7 @@ function diagnostics(law, q, x⃗)
   ρu⃗ = SVector(ρu, ρw)
 
   x, z = x⃗
-  Φ = grav(law) * z
+  Φ = constants(law).grav * z
 
   R_d = gas_constant(law)
   p = EulerGravity.pressure(law, ρ, ρu⃗, ρe, Φ)
@@ -342,17 +342,16 @@ end
 
 
 let
-  #outputdir = joinpath("paper_output", "gravitywave_baldauf")
   outputdir = joinpath("paper_output", "gravitywave")
   diagnostic_data, convergence_data = calculate_diagnostics(outputdir)
 
   plotdir = joinpath("paper_plots", "gravitywave")
   mkpath(plotdir)
 
-  #for (N, KX) in keys(diagnostic_data)
-  #  contour_plot(plotdir, diagnostic_data, N, KX)
-  #  line_plot(plotdir, diagnostic_data, N, KX)
-  #end
+  for (N, KX) in keys(diagnostic_data)
+    contour_plot(plotdir, diagnostic_data, N, KX)
+    line_plot(plotdir, diagnostic_data, N, KX)
+  end
 
   #compare_contour_plot(plotdir, diagnostic_data, 3, (50, 100))
   #compare_line_plot(plotdir, diagnostic_data, 3, (50, 100))

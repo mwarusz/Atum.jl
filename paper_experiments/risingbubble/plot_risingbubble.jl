@@ -14,13 +14,13 @@ function potential_temperature(law, q, x⃗)
   ρu⃗ = SVector(ρu, ρw)
 
   x, z = x⃗
-  Φ = grav(law) * z
+  Φ = constants(law).grav * z
 
   R_d = gas_constant(law)
   p = EulerGravity.pressure(law, ρ, ρu⃗, ρe, Φ)
   p0 = 1e5
   T = p / (R_d * ρ)
-  θ = T * (p0 / p) ^ (1 - 1 / γ(law))
+  θ = T * (p0 / p) ^ (1 - 1 / constants(law).γ)
 end
 
 function diagnostics(law, q, qref, x⃗)
@@ -65,12 +65,13 @@ function contour_plot(root, diagnostic_data, N, KX)
   levels = [-0.2, -0.1, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
   fig = figure(figsize=(14, 12))
   ax = gca()
-  xticks = range(0, 2000, length = 5)
+  xticks = range(-1000, 1000, length = 5)
+  yticks = range(0, 2000, length = 5)
   ax.set_title("Potential temperature perturbation [K]")
   ax.set_xlim([xticks[1], xticks[end]])
-  ax.set_ylim([xticks[1], xticks[end]])
+  ax.set_ylim([yticks[1], yticks[end]])
   ax.set_xticks(xticks)
-  ax.set_yticks(xticks)
+  ax.set_yticks(yticks)
   ax.set_xlabel(L"x" * " [m]")
   ax.set_ylabel(L"z" * " [m]")
   norm = matplotlib.colors.TwoSlopeNorm(vmin=levels[1], vcenter=0, vmax=levels[end])
@@ -83,7 +84,7 @@ function contour_plot(root, diagnostic_data, N, KX)
 end
 
 let
-  outputdir = joinpath("paper_output", "risingbubble")
+  outputdir = joinpath("risingbubble")
   diagnostic_data = calculate_diagnostics(outputdir)
 
   plotdir = joinpath("paper_plots", "risingbubble")

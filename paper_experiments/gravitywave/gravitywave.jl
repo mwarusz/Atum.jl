@@ -11,7 +11,7 @@ const _H = 10e3
 function gas_constant(law)
   FT = eltype(law)
   cv_d = FT(719)
-  cp_d = γ(law) * cv_d
+  cp_d = constants(law).γ * cv_d
   R_d = cp_d - cv_d
 end
 
@@ -33,7 +33,7 @@ function referencestate(law::EulerGravityLaw, x⃗)
   p_s = FT(1e5)
   T_ref = FT(250)
 
-  δ = grav(law) / (R_d * T_ref)
+  δ = constants(law).grav / (R_d * T_ref)
   ρ_s = p_s / (T_ref * R_d)
   ρ_ref = ρ_s * exp(-δ * z)
 
@@ -47,7 +47,7 @@ function calculate_diagnostics(law, q, x⃗)
   ρu⃗ = SVector(ρu, ρw)
 
   x, z = x⃗
-  Φ = grav(law) * z
+  Φ = constants(law).grav * z
 
   R_d = gas_constant(law)
   p = EulerGravity.pressure(law, ρ, ρu⃗, ρe, Φ)
@@ -66,10 +66,10 @@ function gravitywave(law, x⃗, t, add_perturbation=true)
   FT = eltype(law)
   x, z = x⃗
 
-  Φ = grav(law) * z
+  Φ = constants(law).grav * z
 
   cv_d = FT(719)
-  cp_d = γ(law) * cv_d
+  cp_d = constants(law).γ * cv_d
   R_d = cp_d - cv_d
 
   ΔT = FT(_ΔT)
@@ -82,7 +82,7 @@ function gravitywave(law, x⃗, t, add_perturbation=true)
   p_s = FT(1e5)
   T_ref = FT(250)
 
-  g = grav(law)
+  g = constants(law).grav
   δ = g / (R_d * T_ref)
   c_s = sqrt(cp_d / cv_d * R_d * T_ref)
   ρ_s = p_s / (T_ref * R_d)

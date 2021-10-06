@@ -37,6 +37,7 @@ function run(A, FT, N, KX, KY;
   end
 
   do_output = function(step, time, q)
+    @show step, time
     if outputvtk && step % ceil(Int, timeend / 100 / dt) == 0
       filename = "step$(lpad(step, 6, '0'))"
       vtkfile = vtk_grid(joinpath(vtkdir, filename), grid)
@@ -55,7 +56,10 @@ function run(A, FT, N, KX, KY;
   odesolver = LSRK54(dg, q, dt)
 
   outputvtk && do_output(0, FT(0), q)
+
+  println("Starting")
   solve!(q, timeend, odesolver; after_step=do_output)
+  println("Finished")
   outputvtk && vtk_save(pvd)
 
   if outputjld
