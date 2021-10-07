@@ -1,7 +1,7 @@
 export weightednorm
 export entropyintegral
 
-using LinearAlgebra: norm
+using LinearAlgebra: norm, dot
 
 weightednorm(dg, q, p = 2; componentwise=false) =
   weightednorm(q, Val(p), dg.MJ, componentwise)
@@ -21,3 +21,4 @@ function weightednorm(q, ::Val{Inf}, _, componentwise)
 end
 
 entropyintegral(dg, q) = sum(dg.MJ .* entropy.(Ref(dg.law), q, dg.auxstate))
+entropyproduct(dg, p, q) = sum(dg.MJ .* dot.(entropyvariables.(Ref(dg.law), p, dg.auxstate), q))
