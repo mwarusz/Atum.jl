@@ -53,6 +53,16 @@ module ShallowWater
     ρu⃗' * ρu⃗ / 2ρ + grav * ρ ^ 2 / 2
   end
 
+  function Atum.entropyvariables(law::ShallowWaterLaw, q, aux)
+    FT = eltype(law)
+    ρ, ρu⃗, ρθ = unpackstate(law, q)
+    grav = constants(law).grav
+    vρ = -ρu⃗' * ρu⃗ / (2 * ρ ^ 2) + grav * ρ
+    vρu⃗ = ρu⃗ / ρ
+    vρθ = FT(0)
+    SVector(vρ, vρu⃗..., vρθ)
+  end
+
   function Atum.surfaceflux(::Atum.RoeFlux, law::ShallowWaterLaw, n⃗, q⁻, aux⁻, q⁺, aux⁺)
     g = constants(law).grav
     f⁻ = Atum.flux(law, q⁻, aux⁻)
