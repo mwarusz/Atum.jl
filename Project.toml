@@ -23,3 +23,4 @@ WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 
 [compat]
 StructArrays = "= 0.6.0"
+Bennu = "0.2"
