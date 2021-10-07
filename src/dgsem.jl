@@ -49,7 +49,7 @@ function DGSEM(; law, grid, surface_numericalflux,
 end
 getdevice(dg::DGSEM) = Bennu.device(arraytype(referencecell(dg)))
 
-function (dg::DGSEM)(dq, q, time)
+function (dg::DGSEM)(dq, q, time; increment = true)
   cell = referencecell(dg)
   grid = dg.grid
   device = getdevice(dg)
@@ -61,8 +61,8 @@ function (dg::DGSEM)(dq, q, time)
 
   comp_stream = Event(device)
 
-  comp_stream = launch_volumeterm(dg.volume_form,
-                                  dq, q, dg, dependencies=comp_stream)
+  comp_stream = launch_volumeterm(dg.volume_form, dq, q, dg;
+                                  increment, dependencies=comp_stream)
 
   Nfp = Nq ^ (dim  - 1)
   workgroup_face = (Nfp,)
@@ -90,7 +90,7 @@ function (dg::DGSEM)(dq, q, time)
   wait(comp_stream)
 end
 
-function launch_volumeterm(::WeakForm, dq, q, dg; dependencies)
+function launch_volumeterm(::WeakForm, dq, q, dg; increment, dependencies)
   device = getdevice(dg)
   cell = referencecell(dg)
   Nq = size(cell)[1]
@@ -108,7 +108,8 @@ function launch_volumeterm(::WeakForm, dq, q, dg; dependencies)
     dg.auxstate,
     Val(dim),
     Val(Nq),
-    Val(numberofstates(dg.law));
+    Val(numberofstates(dg.law)),
+    Val(increment);
     ndrange,
     dependencies
   )
@@ -116,7 +117,7 @@ function launch_volumeterm(::WeakForm, dq, q, dg; dependencies)
   comp_stream
 end
 
-function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; dependencies)
+function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; increment, dependencies)
   cell = referencecell(dg)
   device = getdevice(dg)
   Nq = size(cell)[1]
@@ -140,7 +141,8 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; dependencies)
       Val(dim),
       Val(Nq),
       Val(numberofstates(dg.law)),
-      Val(Naux);
+      Val(Naux),
+      Val(increment);
       ndrange,
       dependencies
     )
@@ -164,7 +166,8 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; dependencies)
         Val(dim),
         Val(Nq),
         Val(numberofstates(dg.law)),
-        Val(Naux);
+        Val(Naux),
+        Val(dir == 1 ? increment : true);
         ndrange,
         dependencies = comp_stream
       )
@@ -186,7 +189,8 @@ end
                              auxstate,
                              ::Val{dim},
                              ::Val{Nq},
-                             ::Val{Ns}) where {dim, Nq, Ns}
+                             ::Val{Ns},
+                             ::Val{increment}) where {dim, Nq, Ns, increment}
   @uniform begin
     FT = eltype(law)
     Nq1 = Nq
@@ -249,7 +253,11 @@ end
       end
     end
 
-    dq[ijk, e] += dqijk
+    if increment
+      dq[ijk, e] += dqijk
+    else
+      dq[ijk, e] = dqijk[:]
+    end
   end
 end
 
@@ -265,7 +273,8 @@ end
                                ::Val{dim},
                                ::Val{Nq},
                                ::Val{Ns},
-                               ::Val{Naux}) where {dim, Nq, Ns, Naux}
+                               ::Val{Naux},
+                               ::Val{increment}) where {dim, Nq, Ns, Naux, increment}
   @uniform begin
     FT = eltype(law)
     Nq1 = Nq
@@ -400,7 +409,11 @@ end
       end
 
       ijk = i + Nq * (j - 1 + Nq * (k - 1))
-      dq[ijk, e] += dqijk
+      if increment
+        dq[ijk, e] += dqijk
+      else
+        dq[ijk, e] = dqijk[:]
+      end
     end
   end
 end
@@ -419,7 +432,8 @@ end
                                    ::Val{dim},
                                    ::Val{Nq},
                                    ::Val{Ns},
-                                   ::Val{Naux}) where {dir, dim, Nq, Ns, Naux}
+                                   ::Val{Naux},
+                                   ::Val{increment}) where {dir, dim, Nq, Ns, Naux, increment}
   @uniform begin
     FT = eltype(law)
     Nq1 = Nq
@@ -487,7 +501,11 @@ end
       end
     end
 
-    dq[ijk, e] += dqijk
+    if increment
+      dq[ijk, e] += dqijk
+    else
+      dq[ijk, e] = dqijk[:]
+    end
   end
 end
 

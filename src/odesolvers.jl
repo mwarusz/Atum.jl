@@ -1,4 +1,8 @@
-export LSRK144, LSRK54, solve!, dostep!
+using NLsolve: nlsolve
+
+export solve!
+export LSRK144, LSRK54
+export RLSRK144, RLSRK54
 
 function solve!(q, timeend, solver;
                 after_step::Function = (x...) -> nothing,
@@ -49,7 +53,124 @@ function dostep!(q, lsrk::LSRK, after_stage)
   lsrk.time += dt
 end
 
+function LSRK54(rhs!, q, dt; t0 = 0)
+  rka, rkb, rkc = coefficients_lsrk54()
+  LSRK(rhs!, rka, rkb, rkc, q, dt, t0)
+end
+
 function LSRK144(rhs!, q, dt; t0 = 0)
+  rka, rkb, rkc = coefficients_lsrk144()
+  LSRK(rhs!, rka, rkb, rkc, q, dt, t0)
+end
+
+mutable struct RLSRK{FT, AT, NS, RHS}
+  dt::FT
+  time::FT
+  γ::FT
+  rhs!::RHS
+  dq::AT
+  q0::AT
+  k::AT
+  rka::NTuple{NS, FT}
+  rkb::NTuple{NS, FT}
+  rkb_full::NTuple{NS, FT}
+  rkc::NTuple{NS, FT}
+
+  function RLSRK(rhs!, rka, rkb, rkc, q, dt, t0)
+      FT = eltype(eltype(q))
+      dq = similar(q)
+      fill!(dq, zero(eltype(q)))
+      q0 = similar(q)
+      k = similar(q)
+      # construct standard RK b coefficients
+      rkb_full = zeros(FT, length(rkb))
+      rkb_full[end] = rkb[end]
+      for i in length(rkb)-1:-1:1
+        rkb_full[i] = rka[i+1] * rkb_full[i+1] + rkb[i]
+      end
+      γ = FT(1)
+
+      AT = typeof(q)
+      RHS = typeof(rhs!)
+      new{FT, AT, length(rka), RHS}(FT(dt), FT(t0), γ, rhs!, dq, q0, k,
+                                    rka, rkb, Tuple(rkb_full), rkc)
+  end
+end
+
+function dostep!(q, rlsrk::RLSRK{FT}, after_stage) where {FT}
+  @unpack rhs!, dq, q0, k, dt, time = rlsrk
+  @unpack rka, rkb, rkb_full, rkc = rlsrk
+
+  q0 .= q
+  η0 = entropyintegral(rhs!, q0)
+  dη = -zero(FT)
+
+  for stage = 1:length(rka)
+    dq .*= rka[stage]
+    stagetime = time + rkc[stage] * dt
+    rhs!(k, q, stagetime; increment = false)
+    dq .+= k
+    dη += rkb_full[stage] * dt * entropyproduct(rhs!, q, k)
+
+    @. q += rkb[stage] * dt * dq
+    after_stage(stagetime, q)
+  end
+
+  @. k = q - q0
+  function r(F, γ)
+    @. q = q0 + γ[1] * k
+    F[1] = entropyintegral(rhs!, q) - η0 - γ[1] * dη
+  end
+  function dr(J, γ)
+    @. q = q0 + γ[1] * k
+    J[1] = entropyproduct(rhs!, q, k) - dη
+  end
+  sol = nlsolve(r, dr, [rlsrk.γ]; ftol=10eps(FT))
+  rlsrk.γ = sol.zero[1]
+  q .= q0 .+ rlsrk.γ * k
+
+  rlsrk.time += dt
+end
+
+function RLSRK54(rhs!, q, dt; t0 = 0)
+  rka, rkb, rkc = coefficients_lsrk54()
+  RLSRK(rhs!, rka, rkb, rkc, q, dt, t0)
+end
+
+function RLSRK144(rhs!, q, dt; t0 = 0)
+  rka, rkb, rkc = coefficients_lsrk144()
+  RLSRK(rhs!, rka, rkb, rkc, q, dt, t0)
+end
+
+function coefficients_lsrk54()
+  rka = (
+    (0),
+    (-567301805773 // 1357537059087),
+    (-2404267990393 // 2016746695238),
+    (-3550918686646 // 2091501179385),
+    (-1275806237668 // 842570457699),
+  )
+
+  rkb = (
+    (1432997174477 // 9575080441755),
+    (5161836677717 // 13612068292357),
+    (1720146321549 // 2090206949498),
+    (3134564353537 // 4481467310338),
+    (2277821191437 // 14882151754819),
+  )
+
+  rkc = (
+    (0),
+    (1432997174477 // 9575080441755),
+    (2526269341429 // 6820363962896),
+    (2006345519317 // 3224310063776),
+    (2802321613138 // 2924317926251),
+  )
+
+  rka, rkb, rkc
+end
+
+function coefficients_lsrk144()
   rka = (
      0,
     -0.7188012108672410,
@@ -100,32 +221,6 @@ function LSRK144(rhs!, q, dt; t0 = 0)
     0.8627060376969976,
     0.8734213127600976,
   )
-  LSRK(rhs!, rka, rkb, rkc, q, dt, t0)
-end
 
-function LSRK54(rhs!, q, dt; t0 = 0)
-  rka = (
-    (0),
-    (-567301805773 // 1357537059087),
-    (-2404267990393 // 2016746695238),
-    (-3550918686646 // 2091501179385),
-    (-1275806237668 // 842570457699),
-  )
-
-  rkb = (
-    (1432997174477 // 9575080441755),
-    (5161836677717 // 13612068292357),
-    (1720146321549 // 2090206949498),
-    (3134564353537 // 4481467310338),
-    (2277821191437 // 14882151754819),
-  )
-
-  rkc = (
-    (0),
-    (1432997174477 // 9575080441755),
-    (2526269341429 // 6820363962896),
-    (2006345519317 // 3224310063776),
-    (2802321613138 // 2924317926251),
-  )
-  LSRK(rhs!, rka, rkb, rkc, q, dt, t0)
+  rka, rkb, rkc
 end
