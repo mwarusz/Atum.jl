@@ -16,7 +16,7 @@ function run(A, FT, N, KX, KY;
   law = EulerGravityLaw{FT, 2}(;pde_level_balance)
   
   cell = LobattoCell{FT, A}(Nq, Nq)
-  vx = range(FT(0), stop=FT(_L), length=KX+1)
+  vx = range(FT(-_L / 2), stop=FT(_L / 2), length=KX+1)
   vz = range(FT(0), stop=FT(_H), length=KY+1)
   grid = brickgrid(cell, (vx, vz); periodic = (true, false))
 
@@ -88,7 +88,7 @@ let
   surface_flux = MatrixFlux()
 
   N = 4
-  KX = 10
-  KY = 10
+  KX = 40
+  KY = 40
   run(A, FT, N, KX, KY; volume_form, surface_flux)
 end
