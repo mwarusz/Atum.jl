@@ -51,6 +51,7 @@ function calculate_diagnostics(outputdir)
     @assert length(jldfiles) == 1
     data = load(joinpath(root, jldfiles[1]))
 
+    timeend = data["timeend"]
     law = data["law"]
     dg = data["dg"]
     grid = dg.grid
@@ -61,10 +62,10 @@ function calculate_diagnostics(outputdir)
     KX = size(grid)[1]
 
     diag = diagnostics.(Ref(law), q, points(grid))
-    diag_exact = diagnostics.(Ref(law), qexact, points(grid))
+    diag_exact_grid = diagnostics.(Ref(law), qexact, points(grid))
 
     dx = _L / KX
-    err_w, err_T = compute_errors(dg, diag, diag_exact)
+    err_w, err_T = compute_errors(dg, diag, diag_exact_grid)
     @show dx, err_w, err_T
 
     if N in keys(convergence_data)
@@ -79,7 +80,9 @@ function calculate_diagnostics(outputdir)
     end
 
     diag_points, diag = interpolate_equidistant(diag, grid)
-    _, diag_exact = interpolate_equidistant(diag_exact, grid)
+
+    diag_exact = gravitywave.(Ref(law), diag_points, timeend)
+    diag_exact = diagnostics.(Ref(law), diag_exact, diag_points)
 
     x, z = components(diag_points)
     # convert coordiantes to km

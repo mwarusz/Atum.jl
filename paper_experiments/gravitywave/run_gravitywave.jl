@@ -74,12 +74,8 @@ function run(A, FT, N, KX, KY;
     q = adapt(Array, q)
     qexact = adapt(Array, qexact)
 
-    @show typeof(dg.MJ)
-    @show typeof(points(dg.grid))
-    @show typeof(q)
-    @show typeof(qexact)
-
     @save(joinpath(jlddir, "finalstep.jld2"),
+          timeend,
           law,
           dg,
           q,
