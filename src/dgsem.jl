@@ -192,7 +192,8 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; increment, dep
         Val(dim),
         Val(Nq),
         Val(numberofstates(dg.law)),
-        Val(Naux);
+        Val(Naux),
+        Val(dir == 1 ? increment : true);
         ndrange,
         dependencies = comp_stream
       )
@@ -548,7 +549,8 @@ end
                                              ::Val{dim},
                                              ::Val{Nq},
                                              ::Val{Ns},
-                                             ::Val{Naux}) where {dir, dim, Nq, Ns, Naux}
+                                             ::Val{Naux},
+                                             ::Val{increment}) where {dir, dim, Nq, Ns, Naux, increment}
   @uniform begin
     FT = eltype(law)
     Nq1 = Nq
@@ -643,7 +645,11 @@ end
       end
     end
 
-    dq[ijk, e] += (dqijk1 + dqijk2)
+    if increment
+      dq[ijk, e] += (dqijk1 + dqijk2)
+    else
+      dq[ijk, e] = (dqijk1 + dqijk2)[:]
+    end
   end
 end
 
