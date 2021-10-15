@@ -111,7 +111,7 @@ let
   KX = 10
   KY = 10
   experiments["lowres_ec"] =
-    run(A, law, N, KX, KY; volume_form, surface_flux = EntropyConservativeFlux())
+    run(A, law, N, KX, KY, warp; volume_form, surface_flux = EntropyConservativeFlux())
   experiments["lowres_matrix"] =
     run(A, law, N, KX, KY, warp; volume_form, surface_flux = MatrixFlux())
 
