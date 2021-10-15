@@ -30,33 +30,35 @@ function diagnostics(law, q, qref, x⃗)
   SVector(δθ)
 end
 
-function calculate_diagnostics(outputdir)
+function calculate_diagnostics(outputfile)
   diagnostic_data = Dict()
 
-  for (root, dir, files) in walkdir(outputdir)
-    jldfiles = filter(s->endswith(s, "jld2"), files)
-    length(jldfiles) == 0 && continue
-    @assert length(jldfiles) == 1
-    data = load(joinpath(root, jldfiles[1]))
+  data = load(outputfile)
 
-    law = data["law"]
-    dg = data["dg"]
+  law = data["law"]
+  experiments = data["experiments"]
+  for exp_key in keys(experiments)
+    exp = experiments[exp_key]
+    dg = exp.dg
+    q = exp.q
+    qref = exp.qref
+    dη_timeseries = exp.dη_timeseries
+
     grid = dg.grid
     cell = referencecell(grid)
-    q = data["q"]
-    qref = data["qref"]
     N = size(cell)[1] - 1
     KX = size(grid)[1]
 
     diag = diagnostics.(Ref(law), q, qref, points(grid))
     diag_points, diag = interpolate_equidistant(diag, grid)
-    diagnostic_data[(N, KX)] = (diag_points, diag)
+    diagnostic_data[(exp_key, N, KX)] = (;diag_points, diag, dη_timeseries)
   end
+
   diagnostic_data
 end
 
-function contour_plot(root, diagnostic_data, N, KX)
-  diag_points, diag = diagnostic_data[(N, KX)]
+function contour_plot(root, diagnostic_data, exp, N, KX)
+  diag_points, diag, _ = diagnostic_data[(exp, N, KX)]
   x, z = components(diag_points)
   FT = eltype(x)
   δθ = first(components(diag))
@@ -80,17 +82,53 @@ function contour_plot(root, diagnostic_data, N, KX)
   ax.set_aspect(1)
   cbar = colorbar(cset)
   tight_layout()
-  savefig(joinpath(root, "rtb_tht_perturbation_$(N)_$(KX).pdf"))
+  savefig(joinpath(root, "rtb_tht_perturbation_$(exp)_$(N)_$(KX).pdf"))
+end
+
+function entropy_conservation_plot(root, diagnostic_data, N, KX)
+  dη_ts_ec = diagnostic_data[("lowres_ec", N, KX)].dη_timeseries
+  dη_ts_mat = diagnostic_data[("lowres_matrix", N, KX)].dη_timeseries
+
+  t_ec = first.(dη_ts_ec)
+  dη_ec = last.(dη_ts_ec)
+
+  t_mat = first.(dη_ts_mat)
+  dη_mat = last.(dη_ts_mat)
+
+  t_ec = t_ec[1:10:end]
+  dη_ec = dη_ec[1:10:end]
+
+  t_mat = t_mat[1:10:end]
+  dη_mat = dη_mat[1:10:end]
+
+  @pgf begin
+    plot_ec = Plot({mark="o", color="red"}, Coordinates(t_ec, dη_ec))
+    plot_matrix = Plot({mark="x", color="blue"}, Coordinates(t_mat, dη_mat))
+    legend = Legend("Entropy conservative flux", "Matrix dissipation flux")
+    axis = Axis({
+                 ylabel=L"(\eta - \eta_0) / |\eta_0|",
+                 xlabel="time [s]",
+                 legend_pos="south west",
+                },
+                #L"\node[] at (320,-0.5e-8) {vanilla DGSEM};",
+                #L"\node[] at (270,-0.6e-8) {breaks here};",
+                plot_ec,
+                plot_matrix,
+                #plot300,
+               legend)
+    pgfsave(joinpath(root, "rtb_entropy.pdf"), axis)
+  end
 end
 
 let
-  outputdir = joinpath("risingbubble")
-  diagnostic_data = calculate_diagnostics(outputdir)
+  outputfile = joinpath("paper_output", "risingbubble", "jld2", "risingbubble.jld2")
+  diagnostic_data = calculate_diagnostics(outputfile)
 
   plotdir = joinpath("paper_plots", "risingbubble")
   mkpath(plotdir)
 
-  for (N, KX) in keys(diagnostic_data)
-    contour_plot(plotdir, diagnostic_data, N, KX)
+  for (exp, N, KX) in keys(diagnostic_data)
+    contour_plot(plotdir, diagnostic_data, exp, N, KX)
   end
+  entropy_conservation_plot(plotdir, diagnostic_data, 4, 5)
 end

@@ -127,6 +127,7 @@ function dostep!(q, rlsrk::RLSRK{FT}, after_stage) where {FT}
   end
   sol = nlsolve(r, dr, [rlsrk.γ]; ftol=10eps(FT))
   rlsrk.γ = sol.zero[1]
+  @assert rlsrk.γ > 0
   q .= q0 .+ rlsrk.γ * k
 
   rlsrk.time += dt

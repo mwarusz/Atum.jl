@@ -5,39 +5,58 @@ using JLD2
 using CUDA
 using Adapt
 
-function run(A, FT, N, KX, KY;
+function run(A, law, N, KX, KY, warp;
              volume_form=WeakForm(),
              surface_flux=RoeFlux(),
-             outputjld=true,
-             outputvtk=false)
+             outputvtk=true)
+  FT = eltype(law)
   Nq = N + 1
-
-  pde_level_balance = volume_form isa WeakForm
-  law = EulerGravityLaw{FT, 2}(;pde_level_balance)
   
   cell = LobattoCell{FT, A}(Nq, Nq)
   vx = range(FT(-_L / 2), stop=FT(_L / 2), length=KX+1)
   vz = range(FT(0), stop=FT(_H), length=KY+1)
-  grid = brickgrid(cell, (vx, vz); periodic = (true, false))
+
+  function meshwarp(x)
+      x₁, x₂ = x
+      x̃₁ = x₁ + sinpi((x₁ - first(vx)) / _L) * sinpi(2 * x₂ / _H) * _L / 20
+      x̃₂ = x₂ - sinpi(2 * (x₁ - first(vx)) / _L) * sinpi(x₂ / _H) * _H / 20
+      SVector(x̃₁, x̃₂)
+  end
+
+  grid = brickgrid(warp ? meshwarp : identity,
+                   cell, (vx, vz); periodic = (true, false))
 
   dg = DGSEM(; law, grid, volume_form,
                surface_numericalflux = surface_flux)
 
-  cfl = FT(1 // 10)
-  dt = cfl * min_node_distance(grid) / 330
+  cfl = FT(8 // 10)
+  dt = cfl * min_node_distance(grid) / EulerGravity.soundspeed(law, FT(1.16), FT(1e5))
   timeend = FT(1000)
- 
+
   q = risingbubble.(Ref(law), points(grid))
   qref = risingbubble.(Ref(law), points(grid), false)
 
   if outputvtk
-    vtkdir = joinpath("paper_output", "risingbubble")
+    vtkdir = joinpath("paper_output",
+                      "risingbubble",
+                      "vtk",
+                      "$N",
+                      "$(KX)x$(KY)")
+
     mkpath(vtkdir)
     pvd = paraview_collection(joinpath(vtkdir, "timesteps"))
   end
 
+  dη_timeseries = NTuple{2, FT}[]
+  η0 = entropyintegral(dg, q)
   do_output = function(step, time, q)
-    @show step, time
+    if step % 100 == 0
+      ηf = entropyintegral(dg, q)
+      dη = (ηf - η0) / abs(η0)
+      push!(dη_timeseries, (time, dη))
+      @show step, time, dη
+      flush(stdout)
+    end
     if outputvtk && step % ceil(Int, timeend / 100 / dt) == 0
       filename = "step$(lpad(step, 6, '0'))"
       vtkfile = vtk_grid(joinpath(vtkdir, filename), grid)
@@ -53,7 +72,7 @@ function run(A, FT, N, KX, KY;
     end
   end
 
-  odesolver = LSRK54(dg, q, dt)
+  odesolver = RLSRK54(dg, q, dt)
 
   outputvtk && do_output(0, FT(0), q)
 
@@ -62,33 +81,48 @@ function run(A, FT, N, KX, KY;
   println("Finished")
   outputvtk && vtk_save(pvd)
 
-  if outputjld
-    jlddir = joinpath("paper_output",
-                      "risingbubble",
-                      "$N",
-                      "$(KX)x$(KY)")
+  dg = adapt(Array, dg)
+  q = adapt(Array, q)
+  qref = adapt(Array, qref)
 
-    mkpath(jlddir)
-    dg = adapt(Array, dg)
-    q = adapt(Array, q)
-    qref = adapt(Array, qref)
-
-    @save(joinpath(jlddir, "finalstep.jld2"),
-          law,
-          dg,
-          q,
-          qref)
-  end
+  (; dg, q, qref, dη_timeseries)
 end
 
 let
-  A = CuArray
+  A = Array
   FT = Float64
+
   volume_form = FluxDifferencingForm(EntropyConservativeFlux())
-  surface_flux = MatrixFlux()
+  pde_level_balance = volume_form isa WeakForm
+  law = EulerGravityLaw{FT, 2}(;pde_level_balance)
+
+  jlddir = joinpath("paper_output",
+                    "risingbubble",
+                    "jld2")
+  mkpath(jlddir)
+
+
+  experiments = Dict()
 
   N = 4
+
+  # entropy conservation, low res, warping
+  warp = true
+  KX = 10
+  KY = 10
+  experiments["lowres_ec"] =
+    run(A, law, N, KX, KY; volume_form, surface_flux = EntropyConservativeFlux())
+  experiments["lowres_matrix"] =
+    run(A, law, N, KX, KY, warp; volume_form, surface_flux = MatrixFlux())
+
+  # plotting, high res, no warping
+  warp = false
   KX = 40
   KY = 40
-  run(A, FT, N, KX, KY; volume_form, surface_flux)
+  experiments["hires_matrix"] =
+    run(A, law, N, KX, KY, warp; volume_form, surface_flux = MatrixFlux())
+
+  @save(joinpath(jlddir, "risingbubble.jld2"),
+        law,
+        experiments)
 end
