@@ -104,17 +104,19 @@ function entropy_conservation_plot(root, diagnostic_data, N, KX)
   @pgf begin
     plot_ec = Plot({mark="o", color="red"}, Coordinates(t_ec, dη_ec))
     plot_matrix = Plot({mark="x", color="blue"}, Coordinates(t_mat, dη_mat))
+    plot_crash = Plot({no_marks, dashed}, Coordinates([360, 360], [0, -2e-8]))
     legend = Legend("Entropy conservative flux", "Matrix dissipation flux")
     axis = Axis({
                  ylabel=L"(\eta - \eta_0) / |\eta_0|",
                  xlabel="time [s]",
+                 #ymode="log",
                  legend_pos="south west",
                 },
-                #L"\node[] at (320,-0.5e-8) {vanilla DGSEM};",
-                #L"\node[] at (270,-0.6e-8) {breaks here};",
+                L"\node[] at (320,-1.0e-8) {vanilla DGSEM};",
+                L"\node[] at (270,-1.2e-8) {breaks here};",
                 plot_ec,
                 plot_matrix,
-                #plot300,
+                plot_crash,
                legend)
     pgfsave(joinpath(root, "rtb_entropy.pdf"), axis)
   end
@@ -130,5 +132,5 @@ let
   for (exp, N, KX) in keys(diagnostic_data)
     contour_plot(plotdir, diagnostic_data, exp, N, KX)
   end
-  entropy_conservation_plot(plotdir, diagnostic_data, 4, 5)
+  entropy_conservation_plot(plotdir, diagnostic_data, 4, 10)
 end
