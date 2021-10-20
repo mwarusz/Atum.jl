@@ -41,67 +41,77 @@ function compute_errors(dg, diag, diag_exact)
   err_w, err_T
 end
 
-function calculate_diagnostics(outputdir)
+function calculate_convergence(data)
   convergence_data = Dict()
+  law = data["law"]
+  experiments = data["experiments"]
+  conv = experiments["conv"]
+
+  for N in keys(conv)
+    for exp in conv[N]
+      dg = exp.dg
+      q = exp.q
+      qexact = exp.qexact
+
+      grid = dg.grid
+      cell = referencecell(grid)
+      N = size(cell)[1] - 1
+      KX = size(grid)[1]
+
+      diag = diagnostics.(Ref(law), q, points(grid))
+      diag_exact = diagnostics.(Ref(law), qexact, points(grid))
+
+      dx = _L / KX
+      err_w, err_T = compute_errors(dg, diag, diag_exact)
+      @show dx, err_w, err_T
+
+      if N in keys(convergence_data)
+        push!(convergence_data[N].w_errors, err_w)
+        push!(convergence_data[N].T_errors, err_T)
+        push!(convergence_data[N].dxs, dx)
+      else
+        convergence_data[N] = (dxs = Float64[], w_errors=Float64[], T_errors=Float64[])
+        push!(convergence_data[N].w_errors, err_w)
+        push!(convergence_data[N].T_errors, err_T)
+        push!(convergence_data[N].dxs, dx)
+      end
+    end
+  end
+  convergence_data
+end
+
+function calculate_diagnostics(data)
   diagnostic_data = Dict()
 
-  for (root, dir, files) in walkdir(outputdir)
-    jldfiles = filter(s->endswith(s, "jld2"), files)
-    length(jldfiles) == 0 && continue
-    @assert length(jldfiles) == 1
-    data = load(joinpath(root, jldfiles[1]))
+  law = data["law"]
+  experiments = data["experiments"]
 
-    timeend = data["timeend"]
-    law = data["law"]
-    dg = data["dg"]
+  for exp_key in keys(experiments)
+    exp_key == "conv" && continue
+    exp = experiments[exp_key]
+    dg = exp.dg
+    q = exp.q
+    timeend = exp.timeend
+
     grid = dg.grid
     cell = referencecell(grid)
-    q = data["q"]
-    qexact = data["qexact"]
     N = size(cell)[1] - 1
     KX = size(grid)[1]
 
     diag = diagnostics.(Ref(law), q, points(grid))
-    diag_exact_grid = diagnostics.(Ref(law), qexact, points(grid))
-
-    dx = _L / KX
-    err_w, err_T = compute_errors(dg, diag, diag_exact_grid)
-    @show dx, err_w, err_T
-
-    if N in keys(convergence_data)
-      push!(convergence_data[N].w_errors, err_w)
-      push!(convergence_data[N].T_errors, err_T)
-      push!(convergence_data[N].dxs, dx)
-    else
-      convergence_data[N] = (dxs = Float64[], w_errors=Float64[], T_errors=Float64[])
-      push!(convergence_data[N].w_errors, err_w)
-      push!(convergence_data[N].T_errors, err_T)
-      push!(convergence_data[N].dxs, dx)
-    end
-
     diag_points, diag = interpolate_equidistant(diag, grid)
-
-    diag_exact = gravitywave.(Ref(law), diag_points, timeend)
-    diag_exact = diagnostics.(Ref(law), diag_exact, diag_points)
+    qexact = gravitywave.(Ref(law), diag_points, timeend)
+    diag_exact = diagnostics.(Ref(law), qexact, diag_points)
 
     x, z = components(diag_points)
     # convert coordiantes to km
     x ./= 1e3
     z ./= 1e3
 
-    diagnostic_data[(N, KX)] = (diag_points, diag, diag_exact)
+    diagnostic_data[(N, KX)] = (; diag_points, diag, diag_exact)
   end
 
-  # sort convergence_data
-  for N in keys(convergence_data)
-    tpl = convergence_data[N]
-    tpl = sort(collect(zip(tpl...)))
-    convergence_data[N] = (dxs=[t[1] for t in tpl],
-                           w_errors = [t[2] for t in tpl],
-                           T_errors = [t[3] for t in tpl])
-  end
-
-  diagnostic_data, convergence_data
+  diagnostic_data
 end
 
 function contour_plot(root, diagnostic_data, N, KX)
@@ -181,7 +191,7 @@ function line_plot(root, diagnostic_data, N, KX)
 end
 
 function convergence_plot(outputdir, convergence_data)
-  dxs = convergence_data[3].dxs
+  dxs = convergence_data[2].dxs
   @pgf begin
     plotsetup = {
               xlabel = "Δx [km]",
@@ -221,7 +231,7 @@ function convergence_plot(outputdir, convergence_data)
             Tcoeff = 5e-6
             wcoeff = 8e-6
           end
-          ordl = (dxs ./ dxs[end]) .^ (N + 1)
+          ordl = (dxs ./ dxs[1]) .^ (N + 1)
           if s === 'T'
             errs = convergence_data[N].T_errors
             ordl *= Tcoeff
@@ -345,8 +355,10 @@ end
 
 
 let
-  outputdir = joinpath("paper_output", "gravitywave")
-  diagnostic_data, convergence_data = calculate_diagnostics(outputdir)
+  outputfile = joinpath("paper_output", "gravitywave", "jld2", "gravitywave.jld2")
+  data = load(outputfile)
+  diagnostic_data = calculate_diagnostics(data)
+  convergence_data = calculate_convergence(data)
 
   plotdir = joinpath("paper_plots", "gravitywave")
   mkpath(plotdir)
@@ -356,7 +368,7 @@ let
     line_plot(plotdir, diagnostic_data, N, KX)
   end
 
-  #compare_contour_plot(plotdir, diagnostic_data, 3, (50, 100))
-  #compare_line_plot(plotdir, diagnostic_data, 3, (50, 100))
+  compare_contour_plot(plotdir, diagnostic_data, 3, (50, 100))
+  compare_line_plot(plotdir, diagnostic_data, 3, (50, 100))
   convergence_plot(plotdir, convergence_data)
 end
