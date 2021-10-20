@@ -18,8 +18,8 @@ function run(A, law, N, KX, KY, warp;
 
   function meshwarp(x)
       x₁, x₂ = x
-      x̃₁ = x₁ + sinpi((x₁ - first(vx)) / _L) * sinpi(2 * x₂ / _H) * _L / 20
-      x̃₂ = x₂ - sinpi(2 * (x₁ - first(vx)) / _L) * sinpi(x₂ / _H) * _H / 20
+      x̃₁ = x₁ + sinpi((x₁ - first(vx)) / _L) * sinpi(2 * x₂ / _H) * _L / 5
+      x̃₂ = x₂ - sinpi(2 * (x₁ - first(vx)) / _L) * sinpi(x₂ / _H) * _H / 5
       SVector(x̃₁, x̃₂)
   end
 
@@ -29,7 +29,7 @@ function run(A, law, N, KX, KY, warp;
   dg = DGSEM(; law, grid, volume_form,
                surface_numericalflux = surface_flux)
 
-  cfl = FT(8 // 10)
+  cfl = FT(4 // 10)
   dt = cfl * min_node_distance(grid) / EulerGravity.soundspeed(law, FT(1.16), FT(1e5))
   timeend = FT(1000)
 
@@ -89,7 +89,7 @@ function run(A, law, N, KX, KY, warp;
 end
 
 let
-  A = Array
+  A = CuArray
   FT = Float64
 
   volume_form = FluxDifferencingForm(EntropyConservativeFlux())
