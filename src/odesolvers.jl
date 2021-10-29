@@ -43,7 +43,7 @@ end
 
 function dostep!(q, lsrk::LSRK, after_stage)
   @unpack rhs!, dq, rka, rkb, rkc, dt, time = lsrk
-  for stage = 1:length(rka)
+  for stage = 1:1
     stagetime = time + rkc[stage] * dt
     dq .*= rka[stage]
     rhs!(dq, q, stagetime)
