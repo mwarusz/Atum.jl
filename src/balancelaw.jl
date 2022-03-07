@@ -14,6 +14,12 @@ function wavespeed end
 boundarystate(::AbstractBalanceLaw, n⃗, q⁻, aux⁻, tag) = q⁻, aux⁻
 source!(::AbstractBalanceLaw, dq, q, aux) = nothing
 nonconservative_term!(::AbstractBalanceLaw, dq, q, aux) = nothing
+function Bennu.fieldarray(init, law::AbstractBalanceLaw,
+                          grid::Bennu.AbstractGrid)
+  FT = eltype(law)
+  nstate = numberofstates(law)
+  return fieldarray(init, SVector{nstate, FT}, grid)
+end
 
 function entropy end
 function entropyvariables end
