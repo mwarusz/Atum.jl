@@ -33,8 +33,9 @@ function run(A, FT, N, K; volume_form=WeakForm())
   cfl = FT(1 // 4)
   dt = cfl * step(v1d) / N / norm(constants(law).u⃗)
   timeend = FT(0.7)
-  
-  q = wave.(Ref(law), points(grid), FT(0))
+
+  q = fieldarray(undef, law, grid)
+  q .= wave.(Ref(law), points(grid), FT(0))
 
   @info @sprintf """Starting
   N           = %d
@@ -46,7 +47,8 @@ function run(A, FT, N, K; volume_form=WeakForm())
   odesolver = LSRK54(dg, q, dt)
   solve!(q, timeend, odesolver)
 
-  qexact = wave.(Ref(law), points(grid), timeend)
+  qexact = fieldarray(undef, law, grid)
+  qexact .= wave.(Ref(law), points(grid), timeend)
   errf = weightednorm(dg, q .- qexact)
 
   @info @sprintf """Finished

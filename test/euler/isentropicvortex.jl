@@ -48,7 +48,8 @@ function run(A, FT, N, K; volume_form=WeakForm())
   dt = cfl * step(vy) / N
   timeend = FT(5)
 
-  q = vortex.(Ref(law), points(grid), FT(0))
+  q = fieldarray(undef, law, grid)
+  q .= vortex.(Ref(law), points(grid), FT(0))
 
   @info @sprintf """Starting
   N           = %d
@@ -60,7 +61,8 @@ function run(A, FT, N, K; volume_form=WeakForm())
   odesolver = LSRK54(dg, q, dt)
   solve!(q, timeend, odesolver)
 
-  qexact = vortex.(Ref(law), points(grid), timeend)
+  qexact = fieldarray(undef, law, grid)
+  qexact .= vortex.(Ref(law), points(grid), timeend)
   errf = weightednorm(dg, q .- qexact)
 
   @info @sprintf """Finished

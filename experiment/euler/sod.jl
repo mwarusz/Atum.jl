@@ -1,5 +1,6 @@
 using Atum
 using Atum.Euler
+using Bennu: fieldarray
 
 using PGFPlotsX
 using StaticArrays: SVector
@@ -35,7 +36,8 @@ function run(A, FT, N, K; volume_form=WeakForm())
   dt = cfl * step(v1d) / N / Euler.soundspeed(law, FT(1), FT(1))
   timeend = FT(2 // 10)
 
-  q = sod.(Ref(law), points(grid))
+  q = fieldarray(undef, law, grid)
+  q .= sod.(Ref(law), points(grid))
 
   odesolver = LSRK54(dg, q, dt)
   solve!(q, timeend, odesolver)

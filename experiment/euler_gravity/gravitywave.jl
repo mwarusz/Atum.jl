@@ -167,8 +167,10 @@ function run(A, FT, N, KX, KY; volume_form=WeakForm(), outputvtk=true)
   dt = cfl * step(vz) / N / 330
   timeend = @isdefined(_testing) ? 10dt : FT(30 * 60)
  
-  q = gravitywave.(Ref(law), points(grid), FT(0))
-  qref = gravitywave.(Ref(law), points(grid), FT(0), false)
+  q = fieldarray(undef, law, grid)
+  q .= gravitywave.(Ref(law), points(grid), FT(0))
+  qref = fieldarray(undef, law, grid)
+  qref .= gravitywave.(Ref(law), points(grid), FT(0), false)
 
   if outputvtk
     vtkdir = joinpath("output", "euler_gravity", "gravitywave")
@@ -198,7 +200,8 @@ function run(A, FT, N, KX, KY; volume_form=WeakForm(), outputvtk=true)
   solve!(q, timeend, odesolver; after_step=do_output)
   outputvtk && vtk_save(pvd)
 
-  qexact = gravitywave.(Ref(law), points(grid), timeend)
+  qexact = fieldarray(undef, law, grid)
+  qexact .= gravitywave.(Ref(law), points(grid), timeend)
   errf = map(components(q), components(qexact)) do f, fexact
     sqrt(sum(dg.MJ .* (f .- fexact) .^ 2))
   end

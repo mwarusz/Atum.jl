@@ -1,5 +1,6 @@
 using Atum
 using Atum.ShallowWater
+using Bennu: fieldarray
 
 using StaticArrays: SVector
 using WriteVTK
@@ -51,7 +52,8 @@ function run(A, FT, N, K; volume_form=WeakForm(), outputvtk=true)
   dt = cfl * step(v1d) / N / sqrt(constants(law).grav)
   timeend = @isdefined(_testing) ? 10dt : FT(200)
  
-  q = bickleyjet.(Ref(law), points(grid))
+  q = fieldarray(undef, law, grid)
+  q .= bickleyjet.(Ref(law), points(grid))
 
   if outputvtk
     vtkdir = joinpath("output", "shallow_water", "bickleyjet")

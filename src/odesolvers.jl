@@ -33,7 +33,7 @@ mutable struct LSRK{FT, AT, NS, RHS}
 
   function LSRK(rhs!, rka, rkb, rkc, q, dt, t0)
       FT = eltype(eltype(q))
-      dq = similar(q)
+      dq = fieldarray(q)
       fill!(dq, zero(eltype(q)))
       AT = typeof(q)
       RHS = typeof(rhs!)
@@ -78,10 +78,10 @@ mutable struct RLSRK{FT, AT, NS, RHS}
 
   function RLSRK(rhs!, rka, rkb, rkc, q, dt, t0)
       FT = eltype(eltype(q))
-      dq = similar(q)
+      dq = fieldarray(q)
       fill!(dq, zero(eltype(q)))
-      q0 = similar(q)
-      k = similar(q)
+      q0 = fieldarray(q)
+      k = fieldarray(q)
       # construct standard RK b coefficients
       rkb_full = zeros(FT, length(rkb))
       rkb_full[end] = rkb[end]
