@@ -316,4 +316,6 @@ module EulerGravity
 
     ecflux - SVector(Dρ, Dρu⃗..., Dρe) / 2
   end
+
+  include("linear_euler_gravity.jl")
 end
