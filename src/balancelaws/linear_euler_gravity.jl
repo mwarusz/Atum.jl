@@ -6,7 +6,7 @@ struct LinearEulerGravityLaw{FT, D, S, C, P} <: Atum.AbstractBalanceLaw{FT, D, S
     new{FT, D, S, C, typeof(parent)}(parent)
   end
 end
-Base.parent(law::LinearEulerGravity) = law.parent
+Base.parent(law::LinearEulerGravityLaw) = law.parent
 
 varsindices(law::LinearEulerGravityLaw) = varsindices(parent(law))
 unpackstate(law::LinearEulerGravityLaw, q) = unpackstate(parent(law), q)
@@ -29,7 +29,7 @@ function pressure(law::LinearEulerGravityLaw, ρ, ρu⃗, ρe, Φ)
   (γ - 1) * (ρe - ρ * Φ)
 end
 function soundspeed(law::LinearEulerGravityLaw, aux)
-  soundspeed(parent(law), reference_p(law, aux) reference_ρ(law, aux))
+  soundspeed(parent(law), reference_p(law, aux), reference_ρ(law, aux))
 end
 
 function Atum.flux(law::LinearEulerGravityLaw, q, aux)

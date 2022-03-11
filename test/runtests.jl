@@ -4,6 +4,7 @@ using Test
   include(joinpath("advection", "runtests.jl"))
   include(joinpath("shallow_water", "runtests.jl"))
   include(joinpath("euler", "runtests.jl"))
+  include(joinpath("euler_gravity", "runtests.jl"))
 end
 
 @testset "experiments" begin
