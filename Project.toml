@@ -1,7 +1,11 @@
+authors = ["Maciej Waruszewski <mwarusz@igf.fuw.edu.pl>"]
 name = "Atum"
 uuid = "3ca8468f-1d7e-47af-b76a-99a1a85ca240"
-authors = ["Maciej Waruszewski <mwarusz@igf.fuw.edu.pl>"]
 version = "0.1.0"
+
+[compat]
+Bennu = "0.3"
+StructArrays = "= 0.6.4"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -21,6 +25,5 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 WriteVTK = "64499a7a-5c06-52f2-abe2-ccb03c286192"
 
-[compat]
-StructArrays = "= 0.6.0"
-Bennu = "0.2"
+[extras]
+CPUSummary = "2a0fbf3d-bb9c-48f3-b0a9-814d99fd7ab9"
