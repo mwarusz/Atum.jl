@@ -33,7 +33,8 @@ end
 
 function DGSEM(; law, grid, surface_numericalflux,
                  volume_form = WeakForm(),
-                 directions = 1:ndims(law))
+                 directions = 1:ndims(law),
+                 auxstate = auxiliary.(Ref(law), points(grid)))
   cell = referencecell(grid)
   M = mass(cell)
   _, J = components(metrics(grid))
@@ -44,8 +45,6 @@ function DGSEM(; law, grid, surface_numericalflux,
   _, faceJ = components(facemetrics(grid))
 
   faceMJ = faceM * faceJ
-
-  auxstate = auxiliary.(Ref(law), points(grid))
 
   args = (law, grid, MJ, MJI, faceMJ, auxstate,
           volume_form, surface_numericalflux)
