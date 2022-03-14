@@ -37,9 +37,7 @@ function run(A, FT, N, K; volume_form=WeakForm())
   Nq = N + 1
 
   u⃗ = FT.((1, 0.3))
-  lawex = AdvectionLaw{FT, 2}(u⃗)
-  law = AdvectionLaw{FT, 2}((u⃗[1], FT(0)))
-  linlaw = AdvectionLaw{FT, 2}((FT(0), u⃗[2]))
+  law = AdvectionLaw{FT, 2}(u⃗)
 
   cell = LobattoCell{FT, A}(Nq, Nq)
   v1d = range(FT(-1), stop=FT(1), length=K+1)
@@ -47,10 +45,12 @@ function run(A, FT, N, K; volume_form=WeakForm())
                    ordering = StackedOrdering{CartesianOrdering}())
 
   dg = DGSEM(; law, grid, volume_form,
-             surface_numericalflux = RusanovFlux())
+             surface_numericalflux = RusanovFlux(),
+             directions = (1,))
 
-  lindg = DGSEM(; law=linlaw, grid, volume_form,
-                surface_numericalflux = RusanovFlux())
+  lindg = DGSEM(; law, grid, volume_form,
+                surface_numericalflux = RusanovFlux(),
+                directions = (2,))
 
   cfl = FT(1 // 4)
   dt = cfl * step(v1d) / N / norm(constants(law).u⃗)
@@ -69,8 +69,8 @@ function run(A, FT, N, K; volume_form=WeakForm())
   odesolver = ARK23(dg, lindg, fieldarray(q), dt)
   solve!(q, timeend, odesolver)
 
-  qexact = fieldarray(undef, lawex, grid)
-  qexact .= wave.(Ref(lawex), points(grid), timeend)
+  qexact = fieldarray(undef, law, grid)
+  qexact .= wave.(Ref(law), points(grid), timeend)
   errf = weightednorm(dg, q .- qexact)
 
   @info @sprintf """Finished
@@ -89,13 +89,13 @@ let
   expected_error = Dict()
 
   #form, lev
-  expected_error[WeakForm(), 1] = 6.2658137389437804e-02
-  expected_error[WeakForm(), 2] = 7.7839989950141009e-03
-  expected_error[WeakForm(), 3] = 1.9527615893143112e-03
+  expected_error[WeakForm(), 1] = 6.2258990105481686e-02
+  expected_error[WeakForm(), 2] = 7.1435479657086494e-03
+  expected_error[WeakForm(), 3] = 1.7909688936818332e-03
 
-  expected_error[FluxDifferencingForm(CentralFlux()), 1] = 6.2658137389437846e-02
-  expected_error[FluxDifferencingForm(CentralFlux()), 2] = 7.7839989950143299e-03
-  expected_error[FluxDifferencingForm(CentralFlux()), 3] = 1.9527615893141709e-03
+  expected_error[FluxDifferencingForm(CentralFlux()), 1] = 6.2258990105481887e-02
+  expected_error[FluxDifferencingForm(CentralFlux()), 2] = 7.1435479657087093e-03
+  expected_error[FluxDifferencingForm(CentralFlux()), 3] = 1.7909688936816061e-03
 
   nlevels = integration_testing ? 3 : 1
 
