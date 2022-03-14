@@ -15,6 +15,7 @@ include("numericalfluxes.jl")
 include("dgsem.jl")
 include("measures.jl")
 include("odesolvers.jl")
+include("bandedsystem.jl")
 
 include("balancelaws/advection.jl")
 include("balancelaws/shallow_water.jl")

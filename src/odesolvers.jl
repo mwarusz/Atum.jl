@@ -1,8 +1,10 @@
 using NLsolve: nlsolve
+using LinearAlgebra: ldiv!
 
 export solve!
 export LSRK144, LSRK54
 export RLSRK144, RLSRK54
+export ARK23
 
 function solve!(q, timeend, solver;
                 after_step::Function = (x...) -> nothing,
@@ -223,4 +225,123 @@ function coefficients_lsrk144()
   )
 
   rka, rkb, rkc
+end
+
+mutable struct ARK{FT, RHS, LINRHS, RKA, RKB, RKC, QHAT, K, FAC, QS}
+  time::FT
+  dt::FT
+  rhs!::RHS
+  linrhs!::LINRHS
+  ex_rka::RKA
+  ex_rkb::RKB
+  ex_rkc::RKC
+  im_rka::RKA
+  im_rkb::RKB
+  im_rkc::RKC
+  Qhat::QHAT
+  ex_K::K
+  im_K::K
+  fac::FAC
+  qstages::QS
+
+  function ARK(rhs!, linrhs!,
+      ex_rka, ex_rkb, ex_rkc,
+      im_rka, im_rkb, im_rkc,
+      q, dt, t0)
+    Qhat = fieldarray(q)
+    Nstages = length(ex_rkc)
+    qstages = ntuple(_->fieldarray(q), Nstages - 1)
+    ex_K = ntuple(_->fieldarray(q), Nstages)
+    im_K = ntuple(_->fieldarray(q), Nstages)
+    mat = Bennu.batchedbandedmatrix(linrhs!, q, Qhat)
+    mid = cld(size(mat.data, 2), 2)
+    mat.data .*= -dt * im_rka[end, end]
+    mat.data[:, mid, :, :] .+= 1
+    fac = batchedbandedlu!(mat.data)
+    TYPES = typeof.((t0, rhs!, linrhs!,
+                     ex_rka, ex_rkb, ex_rkc,
+                     Qhat, ex_K, fac, qstages))
+    return new{TYPES...}(t0, dt, rhs!, linrhs!,
+                         ex_rka, ex_rkb, ex_rkc,
+                         im_rka, im_rkb, im_rkc,
+                         Qhat, ex_K, im_K, fac, qstages)
+  end
+end
+
+# This uses the second-order-accurate 3-stage additive Runge--Kutta scheme of
+# Giraldo, Kelly and Constantinescu (2013).
+function ARK23(rhs!, linrhs!, q, dt; t0 = 0, paperversion = false)
+  FT = eltype(eltype(q))
+  RT = real(FT)
+
+  a32 = RT(paperversion ? (3 + 2 * √2) / 6 : 1 // 2)
+  ex_rka = [
+            RT(0)       RT(0)   RT(0)
+            RT(2 - √2)  RT(0)   RT(0)
+            RT(1 - a32) RT(a32) RT(0)
+           ]
+  ex_rkb = [RT(1 / (2 * √2)), RT(1 / (2 * √2)), RT(1 - 1 / √2)]
+  ex_rkc = [RT(0), RT(2 - √2), RT(1)]
+
+  im_rka = [
+            RT(0)            RT(0)            RT(0)
+            RT(1 - 1 / √2)   RT(1 - 1 / √2)   RT(0)
+            RT(1 / (2 * √2)) RT(1 / (2 * √2)) RT(1 - 1 / √2)
+           ]
+  im_rkb = ex_rkb
+  im_rkc = ex_rkc
+  return ARK(rhs!, linrhs!,
+             ex_rka, ex_rkb, ex_rkc,
+             im_rka, im_rkb, im_rkc,
+             q, RT(dt), RT(t0))
+end
+
+
+function dostep!(q, ark::ARK, after_stage)
+  @unpack time, dt = ark
+  @unpack rhs!, linrhs! = ark
+  @unpack ex_rka, ex_rkb, ex_rkc = ark
+  @unpack im_rka, im_rkb, im_rkc = ark
+  @unpack ex_K, im_K = ark
+  @unpack Qhat, fac = ark
+
+  Q = (q, ark.qstages...)
+
+  # Compute first explicit stage
+  ex_stagetime = time + ex_rkc[1] * dt
+  rhs!(ex_K[1], Q[1], ex_stagetime; increment = false)
+
+  # Compute first implicit stage
+  im_stagetime = time + im_rkc[1] * dt
+  linrhs!(im_K[1], Q[1], im_stagetime; increment = false)
+
+  Nstages = length(ex_rkc)
+  for i = 2:Nstages
+    # q̂ = q + dt * \sum_{k=1}^{i-1} (a_{ik} * f(Q^{(k)}) + ã_{ik} * L * Q^{(k)})
+    Qhat .= q
+    for k = 1:i-1
+      @. Qhat += dt * (ex_rka[i, k] * ex_K[k] + im_rka[i, k] * im_K[k])
+    end
+
+    # Q^{(i)} = (I + dt ã_{ii} * L) \ Qhat
+    ldiv!(Q[i], fac, Qhat)
+
+    # Compute explicit state i
+    ex_stagetime = time + ex_rkc[i] * dt
+    rhs!(ex_K[i], Q[i], ex_stagetime; increment = false)
+
+    # Compute implicit state i
+    im_stagetime = time + im_rkc[i] * dt
+    linrhs!(im_K[i], Q[i], im_stagetime; increment = false)
+
+    after_stage((ex_stagetime, im_stagetime), Q[i])
+  end
+
+  # q += dt * \sum_{i=1}^{s} (b_{i} * f(Q^{(i)}) + b̃_{i} * L * Q^{(i)})
+  for i = 1:Nstages
+    @. q += dt * (ex_rkb[i] * ex_K[i] + im_rkb[i] * im_K[i])
+  end
+
+  # Advance time
+  ark.time += dt
 end
