@@ -12,8 +12,8 @@ auxiliary(law::AbstractBalanceLaw, x⃗) = SVector(nothing)
 function flux end
 function wavespeed end
 boundarystate(::AbstractBalanceLaw, n⃗, q⁻, aux⁻, tag) = q⁻, aux⁻
-source!(::AbstractBalanceLaw, dq, q, aux) = nothing
-nonconservative_term!(::AbstractBalanceLaw, dq, q, aux) = nothing
+source!(::AbstractBalanceLaw, dq, q, aux, dim, directions) = nothing
+nonconservative_term!(::AbstractBalanceLaw, dq, q, aux, directions, dim) = nothing
 function Bennu.fieldarray(init, law::AbstractBalanceLaw,
                           grid::Bennu.AbstractGrid)
   FT = eltype(law)

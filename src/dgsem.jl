@@ -9,7 +9,7 @@ struct FluxDifferencingForm{VNF} <: AbstractVolumeForm
   volume_numericalflux::VNF
 end
 
-struct DGSEM{L, G, A1, A2, A3, A4, VF, SNF}
+struct DGSEM{L, G, A1, A2, A3, A4, VF, SNF, DIR}
   law::L
   grid::G
   MJ::A1
@@ -20,6 +20,9 @@ struct DGSEM{L, G, A1, A2, A3, A4, VF, SNF}
   surface_numericalflux::SNF
 end
 
+directions(::DGSEM{L, G, A1, A2, A3, A4, VF, SNF, DIR}
+          ) where {L, G, A1, A2, A3, A4, VF, SNF, DIR} = DIR
+
 Bennu.referencecell(dg::DGSEM) = referencecell(dg.grid)
 
 function Adapt.adapt_structure(to, dg::DGSEM)
@@ -29,7 +32,8 @@ function Adapt.adapt_structure(to, dg::DGSEM)
 end
 
 function DGSEM(; law, grid, surface_numericalflux,
-                 volume_form = WeakForm())
+                 volume_form = WeakForm(),
+                 directions = 1:ndims(law))
   cell = referencecell(grid)
   M = mass(cell)
   _, J = components(metrics(grid))
@@ -45,7 +49,7 @@ function DGSEM(; law, grid, surface_numericalflux,
 
   args = (law, grid, MJ, MJI, faceMJ, auxstate,
           volume_form, surface_numericalflux)
-  DGSEM{typeof.(args)...}(args...)
+  DGSEM{typeof.(args)..., directions}(args...)
 end
 getdevice(dg::DGSEM) = Bennu.device(arraytype(referencecell(dg)))
 
@@ -82,7 +86,7 @@ function (dg::DGSEM)(dq, q, time; increment = true)
     facenormal,
     boundaryfaces(grid),
     dg.auxstate,
-    Val(dim);
+    Val(directions(dg));
     ndrange,
     dependencies = comp_stream
   )
@@ -109,7 +113,8 @@ function launch_volumeterm(::WeakForm, dq, q, dg; increment, dependencies)
     Val(dim),
     Val(Nq),
     Val(numberofstates(dg.law)),
-    Val(increment);
+    Val(increment),
+    Val(directions(dg));
     ndrange,
     dependencies
   )
@@ -126,6 +131,8 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; increment, dep
 
   kernel_type = :per_dir
   if kernel_type == :naive
+    # FIXME: kernel not updated to support directions
+    @assert directions(dg) == 1:ndims(dg.law)
     workgroup = ntuple(i -> i <= min(2, dim) ? Nq : 1, 3)
     ndrange = (length(dg.grid) * workgroup[1], Base.tail(workgroup)...)
     comp_stream = esvolumeterm!(device, workgroup)(
@@ -142,7 +149,8 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; increment, dep
       Val(Nq),
       Val(numberofstates(dg.law)),
       Val(Naux),
-      Val(increment);
+      Val(increment),
+      Val(directions(dg));
       ndrange,
       dependencies
     )
@@ -150,7 +158,7 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; increment, dep
     workgroup = ntuple(i -> i <= dim ? Nq : 1, 3)
     ndrange = (length(dg.grid) * workgroup[1], Base.tail(workgroup)...)
     comp_stream = dependencies
-    for dir in 1:dim
+    for dir in directions(dg)
       comp_stream = esvolumeterm_dir!(device, workgroup)(
         dg.law,
         dq,
@@ -161,13 +169,12 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; increment, dep
         dg.MJ,
         dg.MJI,
         dg.auxstate,
-        dir == 1, # add_source
         Val(dir),
         Val(dim),
         Val(Nq),
         Val(numberofstates(dg.law)),
         Val(Naux),
-        Val(dir == 1 ? increment : true);
+        Val(dir == directions(dg)[1] ? increment : true);
         ndrange,
         dependencies = comp_stream
       )
@@ -190,7 +197,9 @@ end
                              ::Val{dim},
                              ::Val{Nq},
                              ::Val{Ns},
-                             ::Val{increment}) where {dim, Nq, Ns, increment}
+                             ::Val{increment},
+                             ::Val{directions}) where {dim, Nq, Ns,
+                                                       increment, directions}
   @uniform begin
     FT = eltype(law)
     Nq1 = Nq
@@ -217,12 +226,16 @@ end
     fijk = flux(law, qijk, auxijk)
 
     @unroll for s in 1:Ns
-      @unroll for d in 1:dim
-        l_F[i, j, k, d, s] = g[d, 1] * fijk[1, s]
-        if dim > 1
+      @unroll for d in directions
+        if 1 ∈ directions
+            l_F[i, j, k, d, s] = g[d, 1] * fijk[1, s]
+        else
+            l_F[i, j, k, d, s] = 0
+        end
+        if 2 ∈ directions
           l_F[i, j, k, d, s] += g[d, 2] * fijk[2, s]
         end
-        if dim > 2
+        if 3 ∈ directions
           l_F[i, j, k, d, s] += g[d, 3] * fijk[3, s]
         end
         l_F[i, j, k, d, s] *= MJijk
@@ -230,8 +243,8 @@ end
     end
 
     fill!(dqijk, -zero(FT))
-    source!(law, dqijk, qijk, auxijk)
-    nonconservative_term!(law, dqijk, qijk, auxijk)
+    source!(law, dqijk, qijk, auxijk, dim, directions)
+    nonconservative_term!(law, dqijk, qijk, auxijk, directions, dim)
 
     @synchronize
 
@@ -243,11 +256,13 @@ end
       Dnj = D[n, j] * MJIijk
       Dnk = D[n, k] * MJIijk
       @unroll for s in 1:Ns
-        dqijk[s] += Dni * l_F[n, j, k, 1, s]
-        if dim > 1
+        if 1 ∈ directions
+          dqijk[s] += Dni * l_F[n, j, k, 1, s]
+        end
+        if 2 ∈ directions
           dqijk[s] += Dnj * l_F[i, n, k, 2, s]
         end
-        if dim > 2
+        if 3 ∈ directions
           dqijk[s] += Dnk * l_F[i, j, n, 3, s]
         end
       end
@@ -274,7 +289,9 @@ end
                                ::Val{Nq},
                                ::Val{Ns},
                                ::Val{Naux},
-                               ::Val{increment}) where {dim, Nq, Ns, Naux, increment}
+                               ::Val{increment},
+                               ::Val{directions}) where {dim, Nq, Ns, Naux,
+                                                         increment, directions}
   @uniform begin
     FT = eltype(law)
     Nq1 = Nq
@@ -309,7 +326,7 @@ end
       @unroll for s in 1:Ns
         pencil_q[s, k] = q[ijk, e][s]
       end
-      @unroll for d in 1:dim
+      @unroll for d in directions
         pencil_aux[d, k] = aux[ijk, e][d]
       end
       if dim > 2
@@ -350,7 +367,7 @@ end
         aux1[s] = l_aux[i, j, s]
       end
 
-      source!(law, dqijk, q1, aux1)
+      source!(law, dqijk, q1, aux1, dim, directions)
 
       MJIijk = 1 / pencil_MJ[k]
       @unroll for n in 1:Nq
@@ -427,7 +444,6 @@ end
                                    MJ,
                                    MJI,
                                    auxstate,
-                                   add_source,
                                    ::Val{dir},
                                    ::Val{dim},
                                    ::Val{Nq},
@@ -468,7 +484,7 @@ end
       aux1[s] = auxstate[ijk, e][s]
     end
 
-    add_source && source!(law, dqijk, q1, aux1)
+    source!(law, dqijk, q1, aux1, dim, (dir,))
 
     @synchronize
 
@@ -521,17 +537,18 @@ end
                               facenormal,
                               boundaryfaces,
                               auxstate,
-                              ::Val{dim}) where {faceoffsets, dim}
+                              ::Val{directions}) where {faceoffsets, directions}
   @uniform begin
     FT = eltype(q)
-    nfaces = 2 * dim
   end
 
   e⁻ = @index(Group, Linear)
   i = @index(Local, Linear)
 
   @inbounds begin
-    @unroll for face in 1:nfaces
+    @unroll for d in directions
+      @unroll for f = 1:2
+        face = 2(d-1) + f
         j = i + faceoffsets[face]
         id⁻ = faceix⁻[j, e⁻]
 
@@ -554,6 +571,7 @@ end
         dq[id⁻] -= fMJ * nf * MJI[id⁻]
 
         @synchronize(mod(face, 2) == 0)
+      end
     end
   end
 end
