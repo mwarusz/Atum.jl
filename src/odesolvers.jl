@@ -243,11 +243,13 @@ mutable struct ARK{FT, RHS, LINRHS, RKA, RKB, RKC, QHAT, K, FAC, QS}
   im_K::K
   fac::FAC
   qstages::QS
+  split_rhs::Bool
 
   function ARK(rhs!, linrhs!,
       ex_rka, ex_rkb, ex_rkc,
       im_rka, im_rkb, im_rkc,
-      q, dt, t0)
+      q, dt, t0,
+      split_rhs = false)
     Qhat = fieldarray(q)
     Nstages = length(ex_rkc)
     qstages = ntuple(_->fieldarray(q), Nstages - 1)
@@ -264,13 +266,15 @@ mutable struct ARK{FT, RHS, LINRHS, RKA, RKB, RKC, QHAT, K, FAC, QS}
     return new{TYPES...}(t0, dt, rhs!, linrhs!,
                          ex_rka, ex_rkb, ex_rkc,
                          im_rka, im_rkb, im_rkc,
-                         Qhat, ex_K, im_K, fac, qstages)
+                         Qhat, ex_K, im_K, fac, qstages,
+                         split_rhs)
   end
 end
 
 # This uses the second-order-accurate 3-stage additive Runge--Kutta scheme of
 # Giraldo, Kelly and Constantinescu (2013).
-function ARK23(rhs!, linrhs!, q, dt; t0 = 0, paperversion = false)
+function ARK23(rhs!, linrhs!, q, dt; t0 = 0, paperversion = false,
+               split_rhs = true)
   FT = eltype(eltype(q))
   RT = real(FT)
 
@@ -293,7 +297,7 @@ function ARK23(rhs!, linrhs!, q, dt; t0 = 0, paperversion = false)
   return ARK(rhs!, linrhs!,
              ex_rka, ex_rkb, ex_rkc,
              im_rka, im_rkb, im_rkc,
-             q, RT(dt), RT(t0))
+             q, RT(dt), RT(t0), split_rhs)
 end
 
 
@@ -315,6 +319,10 @@ function dostep!(q, ark::ARK, after_stage)
   im_stagetime = time + im_rkc[1] * dt
   linrhs!(im_K[1], Q[1], im_stagetime; increment = false)
 
+  if !ark.split_rhs
+    ex_K[1] .-= im_K[1]
+  end
+
   Nstages = length(ex_rkc)
   for i = 2:Nstages
     # q̂ = q + dt * \sum_{k=1}^{i-1} (a_{ik} * f(Q^{(k)}) + ã_{ik} * L * Q^{(k)})
@@ -333,6 +341,10 @@ function dostep!(q, ark::ARK, after_stage)
     # Compute implicit state i
     im_stagetime = time + im_rkc[i] * dt
     linrhs!(im_K[i], Q[i], im_stagetime; increment = false)
+
+    if !ark.split_rhs
+      ex_K[i] .-= im_K[i]
+    end
 
     after_stage((ex_stagetime, im_stagetime), Q[i])
   end
