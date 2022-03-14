@@ -33,7 +33,7 @@ function wave(law, x⃗, t)
   SVector(ρ)
 end
 
-function run(A, FT, N, K; volume_form=WeakForm())
+function run(A, FT, N, K; volume_form=WeakForm(), split_rhs = true)
   Nq = N + 1
 
   u⃗ = FT.((1, 0.3))
@@ -46,7 +46,7 @@ function run(A, FT, N, K; volume_form=WeakForm())
 
   dg = DGSEM(; law, grid, volume_form,
              surface_numericalflux = RusanovFlux(),
-             directions = (1,))
+             directions = split_rhs ? (1,) : (1,2))
 
   lindg = DGSEM(; law, grid, volume_form,
                 surface_numericalflux = RusanovFlux(),
@@ -66,7 +66,7 @@ function run(A, FT, N, K; volume_form=WeakForm())
   norm(q)     = %.16e
   """ N K volume_form weightednorm(dg, q)
 
-  odesolver = ARK23(dg, lindg, fieldarray(q), dt)
+  odesolver = ARK23(dg, lindg, fieldarray(q), dt; split_rhs)
   solve!(q, timeend, odesolver)
 
   qexact = fieldarray(undef, law, grid)
@@ -100,16 +100,18 @@ let
   nlevels = integration_testing ? 3 : 1
 
   @testset for volume_form in (WeakForm(), FluxDifferencingForm(CentralFlux()))
-    errors = zeros(FT, nlevels)
-    for l in 1:nlevels
-      K = 5 * 2 ^ (l - 1)
-      errors[l] = run(A, FT, N, K; volume_form)
-      @test errors[l] ≈ expected_error[volume_form, l]
-    end
-    if nlevels > 1
-      rates = log2.(errors[1:(nlevels-1)] ./ errors[2:nlevels])
-      @info "Convergence rates\n" *
+    for split_rhs in (true, false)
+      errors = zeros(FT, nlevels)
+      for l in 1:nlevels
+        K = 5 * 2 ^ (l - 1)
+        errors[l] = run(A, FT, N, K; volume_form, split_rhs)
+        @test errors[l] ≈ expected_error[volume_form, l]
+      end
+      if nlevels > 1
+        rates = log2.(errors[1:(nlevels-1)] ./ errors[2:nlevels])
+        @info "Convergence rates\n" *
         join(["rate for levels $l → $(l + 1) = $(rates[l])" for l in 1:(nlevels - 1)], "\n")
+      end
     end
   end
 end
