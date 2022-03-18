@@ -7,7 +7,8 @@ using StaticArrays: SVector
 using WriteVTK
 
 import Atum: boundarystate
-function boundarystate(law::EulerGravityLaw, n⃗, q⁻, aux⁻, _)
+function boundarystate(law::Union{EulerGravityLaw, LinearEulerGravityLaw},
+        n⃗, q⁻, aux⁻, _)
   ρ⁻, ρu⃗⁻, ρe⁻ = EulerGravity.unpackstate(law, q⁻)
   ρ⁺, ρe⁺ = ρ⁻, ρe⁻
   ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
@@ -77,22 +78,22 @@ function gravitywave(law, x⃗, t, add_perturbation=true)
 
         p_1 = c_s ^ 2 * (k_x ^ 2 + k_z ^ 2 + δ ^ 2 / 4) + f ^ 2
         q_1 = g * k_x ^ 2 * (c_s ^ 2 * δ - g) + c_s ^ 2 * f ^ 2 * (k_z ^ 2 + δ ^ 2 / 4)
-        
+
         α = sqrt(p_1 / 2 - sqrt(p_1 ^ 2 / 4 - q_1))
         β = sqrt(p_1 / 2 + sqrt(p_1 ^ 2 / 4 - q_1))
 
-        fac1 = 1 / (β ^ 2 - α ^ 2) 
+        fac1 = 1 / (β ^ 2 - α ^ 2)
         L_m1 = (-cos(α * t) / α ^ 2 + cos(β * t) / β ^ 2) * fac1 + 1 / (α ^ 2 * β ^ 2)
         L_0 = (sin(α * t) / α - sin(β * t) / β) * fac1
         L_1 = (cos(α * t) - cos(β * t)) * fac1
         L_2 = (-α * sin(α * t) + β * sin(β * t)) * fac1
         L_3 = (-α ^ 2 * cos(α * t) + β ^ 2 * cos(β * t)) * fac1
-        
+
         if α == 0
           L_m1 = (β ^ 2 * t ^ 2 - 1 + cos(β * t)) / β ^ 4
           L_0 = (β * t - sin(β * t)) / β ^ 3
         end
-    
+
         δρ̃_b0 = -ρ_s / T_ref * ΔT / sqrt(π) * d / L *
                 exp(-d ^ 2 * k_x ^ 2 / 4) * exp(-im * k_x * x_c) * k_z * H / 2im
 
@@ -103,12 +104,12 @@ function gravitywave(law, x⃗, t, add_perturbation=true)
 
         δũ_b = im * k_x * (g - c_s ^ 2 * (im * k_z + δ / 2)) * L_0 * g * δρ̃_b0 / ρ_s
 
-        δṽ_b = -f * im * k_x * (g - c_s ^ 2 * (im * k_z + δ / 2)) * L_m1 * g * δρ̃_b0 / ρ_s 
+        δṽ_b = -f * im * k_x * (g - c_s ^ 2 * (im * k_z + δ / 2)) * L_m1 * g * δρ̃_b0 / ρ_s
 
-        δw̃_b = -(L_2 + (f ^ 2 + c_s ^ 2 * k_x ^ 2) * L_0) * g * δρ̃_b0 / ρ_s 
+        δw̃_b = -(L_2 + (f ^ 2 + c_s ^ 2 * k_x ^ 2) * L_0) * g * δρ̃_b0 / ρ_s
 
-        expfac = exp(im * (k_x * xp + k_z * z)) 
-        
+        expfac = exp(im * (k_x * xp + k_z * z))
+
         δρ_b += δρ̃_b * expfac
         δp_b += δp̃_b * expfac
 
@@ -128,14 +129,14 @@ function gravitywave(law, x⃗, t, add_perturbation=true)
     δT_b = T_ref * (δp_b / p_s - δρ_b / ρ_s)
     δT = exp(δ * z / 2) * real(δT_b)
   end
-  
+
   ρ_ref = ρ_s * exp(-δ * z)
-  
+
   ρ = ρ_ref
   T = T_ref
   u = u_0
   w = FT(0)
-  
+
   if add_perturbation
     ρ += δρ
     T += δT
@@ -150,23 +151,36 @@ function gravitywave(law, x⃗, t, add_perturbation=true)
   return SVector(ρ, ρ * u, ρ * w, ρe)
 end
 
-function run(A, FT, N, KX, KY; volume_form=WeakForm(), outputvtk=true)
+function run(A, FT, N, KX, KY; volume_form=WeakForm(), outputvtk=true,
+        useark = true)
   Nq = N + 1
+  dim = 2
 
-  law = EulerGravityLaw{FT, 2}(pde_level_balance=true)
-  
+  law = EulerGravityLaw{FT, dim}(pde_level_balance=volume_form isa WeakForm)
+  linlaw = LinearEulerGravityLaw(law)
+
   cell = LobattoCell{FT, A}(Nq, Nq)
   vx = range(FT(0), stop=FT(300e3), length=KX+1)
   vz = range(FT(0), stop=FT(10e3), length=KY+1)
-  grid = brickgrid(cell, (vx, vz); periodic = (true, false))
+  grid = brickgrid(cell, (vx, vz); periodic = (true, false),
+                   ordering = StackedOrdering{CartesianOrdering}())
 
   dg = DGSEM(; law, grid, volume_form,
-               surface_numericalflux = RoeFlux())
+               surface_numericalflux = RusanovFlux())
+  dg_linear = DGSEM(; law = linlaw, grid,
+                    volume_form = volume_form isa FluxDifferencingForm ?
+                    FluxDifferencingForm(CentralFlux()) : volume_form,
+                    surface_numericalflux = RusanovFlux(),
+                    auxstate=dg.auxstate,
+                    directions = (dim,))
 
-  cfl = FT(1 // 3)
+  cfl = FT(0.75)
   dt = cfl * step(vz) / N / 330
   timeend = @isdefined(_testing) ? 10dt : FT(30 * 60)
- 
+  timeend = FT(100)
+  nsteps = ceil(Int, timeend / dt)
+  dt = timeend / nsteps
+
   q = fieldarray(undef, law, grid)
   q .= gravitywave.(Ref(law), points(grid), FT(0))
   qref = fieldarray(undef, law, grid)
@@ -178,26 +192,31 @@ function run(A, FT, N, KX, KY; volume_form=WeakForm(), outputvtk=true)
     pvd = paraview_collection(joinpath(vtkdir, "timesteps"))
   end
 
+  count = 0
   do_output = function(step, time, q)
-    if outputvtk && step % ceil(Int, timeend / 100 / dt) == 0 
-      filename = "step$(lpad(step, 6, '0'))"
+    if outputvtk && step % ceil(Int, timeend / 100 / dt) == 0
+      filename = "KX_$(lpad(KX, 6, '0'))_KY_$(lpad(KY, 6, '0'))_useark_$(useark)_step$(lpad(count, 6, '0'))"
+      count += 1
       vtkfile = vtk_grid(joinpath(vtkdir, filename), grid)
       P = Bennu.toequallyspaced(cell)
       ρ, ρu, ρv, ρe = components(q)
       ρ_ref, ρu_ref, ρv_ref, ρe_ref = components(qref)
       vtkfile["δρ"] = vec(Array(P * (ρ - ρ_ref)))
-      vtkfile["δρu"] = vec(Array(P * (ρu - ρu_ref)))
-      vtkfile["δρv"] = vec(Array(P * (ρv - ρv_ref)))
-      vtkfile["δρe"] = vec(Array(P * (ρe - ρe_ref)))
+      (vtkfile["δρu"] = vec(Array(P * (ρu - ρu_ref))))
+      (vtkfile["δρv"] = vec(Array(P * (ρv - ρv_ref))))
+      (vtkfile["δρe"] = vec(Array(P * (ρe - ρe_ref))))
       vtk_save(vtkfile)
       pvd[time] = vtkfile
     end
   end
 
-  odesolver = LSRK54(dg, q, dt)
+  # odesolver = LSRK54(dg, q, dt)
+  odesolver = ARK23(dg, useark ? dg_linear : nothing, fieldarray(q), dt;
+                    split_rhs = false,
+                    paperversion = false)
 
   outputvtk && do_output(0, FT(0), q)
-  solve!(q, timeend, odesolver; after_step=do_output)
+  solve!(q, timeend, odesolver; after_step=do_output, adjust_final = false)
   outputvtk && vtk_save(pvd)
 
   qexact = fieldarray(undef, law, grid)
@@ -220,14 +239,19 @@ let
 
   nlevels = @isdefined(_testing) ? 1 : 2
   errors = zeros(FT, nlevels)
-  for l in 1:nlevels
-    KX = KX_base * 2 ^ (l - 1)
-    KY = KY_base * 2 ^ (l - 1)
-    errors[l] = run(A, FT, N, KX, KY)
-  end
-  if nlevels > 1
-    rates = log2.(errors[1:(nlevels-1)] ./ errors[2:nlevels])
-    @show errors
-    @show rates
+  volume_form = FluxDifferencingForm(EntropyConservativeFlux())
+  volume_form = WeakForm()
+  for useark in (true, false)
+    for l in 1:nlevels
+      KX = KX_base * 2 ^ (l - 1)
+      KY = KY_base * 2 ^ (l - 1)
+      errors[l] = run(A, FT, N, KX, KY; useark, volume_form)
+      @show errors[l]
+    end
+    if nlevels > 1
+      rates = log2.(errors[1:(nlevels-1)] ./ errors[2:nlevels])
+      @show errors
+      @show rates
+    end
   end
 end

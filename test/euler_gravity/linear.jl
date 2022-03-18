@@ -5,7 +5,8 @@ using StaticArrays: SVector
 using WriteVTK
 
 import Atum: boundarystate
-function boundarystate(law::LinearEulerGravityLaw, n⃗, q⁻, aux⁻, _)
+function boundarystate(law::Union{LinearEulerGravityLaw, EulerGravityLaw},
+                       n⃗, q⁻, aux⁻, _)
   ρ⁻, ρu⃗⁻, ρe⁻ = EulerGravity.unpackstate(law, q⁻)
   ρ⁺, ρe⁺ = ρ⁻, ρe⁻
   ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
@@ -79,28 +80,37 @@ function initialcondition(law, x⃗)
   SVector(ρ, ρu, ρv, ρe)
 end
 
-function run(A, FT, N, K; volume_form=WeakForm(), outputvtk=true)
+function run(A, FT, N, Kh, Kv; volume_form=WeakForm(), outputvtk=true)
   Nq = N + 1
 
-  law = LinearEulerGravityLaw(EulerGravityLaw{FT, 2}())
+  dim = 2
+  law = LinearEulerGravityLaw(EulerGravityLaw{FT, dim}())
   
   cell = LobattoCell{FT, A}(Nq, Nq)
-  vx = range(FT(0), stop=FT(1e3), length=K+1)
-  vz = range(FT(0), stop=FT(1e3), length=K+1)
-  grid = brickgrid(cell, (vx, vz); periodic = (true, false))
+  vx = range(FT(0), stop=FT(1e3), length=Kh+1)
+  vz = range(FT(0), stop=FT(1e3), length=Kv+1)
+  grid = brickgrid(cell, (vx, vz); periodic = (true, false),
+                   ordering = StackedOrdering{CartesianOrdering}())
+
 
   dg_nonlinear = DGSEM(; law=parent(law), grid, volume_form,
                        surface_numericalflux = RusanovFlux())
-  dg = DGSEM(; law, grid, volume_form, surface_numericalflux = RusanovFlux(),
-             auxstate=dg_nonlinear.auxstate)
+  dg_linear = DGSEM(; law, grid, volume_form, surface_numericalflux = RusanovFlux(),
+                    auxstate=dg_nonlinear.auxstate,
+                    directions = (dim,))
 
-  cfl = FT(1 // 3)
-  dt = cfl * step(vz) / N / 330
+  cfl_h = FT(1 // 4)
+  cfl_v = FT(0.775)
+  # cfl_v = FT(0.8)
+  dt_h = cfl_h * step(vx) / N / 330
+  dt_v = cfl_v * step(vz) / N / 330
+  dt = min(dt_h, dt_v)
   timeend = @isdefined(_testing) ? 10dt : FT(500)
+  timeend = 100dt
  
   q = fieldarray(undef, law, grid)
   q .= initialcondition.(Ref(law), points(grid))
-  qref = similar(q)
+  qref = fieldarray(q)
   qref .= q
 
   if outputvtk
@@ -125,7 +135,17 @@ function run(A, FT, N, K; volume_form=WeakForm(), outputvtk=true)
     end
   end
 
-  odesolver = LSRK54(dg, q, dt)
+  odesolver = ARK23(dg_nonlinear, dg_linear, fieldarray(q), dt;
+                    split_rhs = false,
+                    paperversion = false)
+  #=
+  odesolver = ARK23(nothing, dg_linear, fieldarray(q), dt;
+                    split_rhs = false,
+                    paperversion = false)
+  odesolver = ARK23(dg_nonlinear, nothing, fieldarray(q), dt;
+                    split_rhs = false,
+                    paperversion = false)
+  =#
 
   outputvtk && do_output(0, FT(0), q)
   solve!(q, timeend, odesolver; after_step=do_output)
@@ -136,6 +156,7 @@ let
   A = Array
   FT = Float64
   N = 4
-  K = 10
-  run(A, FT, N, K)
+  Kh = 10
+  Kv = 100
+  run(A, FT, N, Kh, Kv)
 end
