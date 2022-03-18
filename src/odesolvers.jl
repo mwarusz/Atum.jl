@@ -8,14 +8,15 @@ export ARK23
 
 function solve!(q, timeend, solver;
                 after_step::Function = (x...) -> nothing,
-                after_stage::Function = (x...) -> nothing)
+                after_stage::Function = (x...) -> nothing,
+                adjust_final = true)
   finalstep = false
   step = 0
   while true
     step += 1
     time = solver.time
     if time + solver.dt >= timeend
-      solver.dt = timeend - time
+      adjust_final && (solver.dt = timeend - time)
       finalstep = true
     end
     dostep!(q, solver, after_stage)
@@ -230,6 +231,7 @@ end
 mutable struct ARK{FT, RHS, LINRHS, RKA, RKB, RKC, QHAT, K, FAC, QS}
   time::FT
   dt::FT
+  dt_fac::FT
   rhs!::RHS
   linrhs!::LINRHS
   ex_rka::RKA
@@ -257,17 +259,19 @@ mutable struct ARK{FT, RHS, LINRHS, RKA, RKB, RKC, QHAT, K, FAC, QS}
     im_K = ntuple(_->fieldarray(q), Nstages)
     if isnothing(linrhs!)
       fac = nothing
+      dt_fac = dt
     else
       mat = Bennu.batchedbandedmatrix(linrhs!, q, Qhat)
       mid = cld(size(mat.data, 2), 2)
       mat.data .*= -dt * im_rka[end, end]
       mat.data[:, mid, :, :] .+= 1
       fac = batchedbandedlu!(mat.data)
+      dt_fac = dt
     end
     TYPES = typeof.((t0, rhs!, linrhs!,
                      ex_rka, ex_rkb, ex_rkc,
                      Qhat, ex_K, fac, qstages))
-    return new{TYPES...}(t0, dt, rhs!, linrhs!,
+    return new{TYPES...}(t0, dt, dt_fac, rhs!, linrhs!,
                          ex_rka, ex_rkb, ex_rkc,
                          im_rka, im_rkb, im_rkc,
                          Qhat, ex_K, im_K, fac, qstages,
@@ -326,6 +330,7 @@ function dostep!(q, ark::ARK, after_stage)
   # Compute first implicit stage
   im_stagetime = time + im_rkc[1] * dt
   if isnothing(linrhs!)
+    @assert ark.dt === ark.dt_fac
     fill!.(components(im_K[1]), 0)
   else
     linrhs!(im_K[1], Q[1], im_stagetime; increment = false)
