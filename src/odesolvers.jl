@@ -255,11 +255,15 @@ mutable struct ARK{FT, RHS, LINRHS, RKA, RKB, RKC, QHAT, K, FAC, QS}
     qstages = ntuple(_->fieldarray(q), Nstages - 1)
     ex_K = ntuple(_->fieldarray(q), Nstages)
     im_K = ntuple(_->fieldarray(q), Nstages)
-    mat = Bennu.batchedbandedmatrix(linrhs!, q, Qhat)
-    mid = cld(size(mat.data, 2), 2)
-    mat.data .*= -dt * im_rka[end, end]
-    mat.data[:, mid, :, :] .+= 1
-    fac = batchedbandedlu!(mat.data)
+    if isnothing(linrhs!)
+      fac = nothing
+    else
+      mat = Bennu.batchedbandedmatrix(linrhs!, q, Qhat)
+      mid = cld(size(mat.data, 2), 2)
+      mat.data .*= -dt * im_rka[end, end]
+      mat.data[:, mid, :, :] .+= 1
+      fac = batchedbandedlu!(mat.data)
+    end
     TYPES = typeof.((t0, rhs!, linrhs!,
                      ex_rka, ex_rkb, ex_rkc,
                      Qhat, ex_K, fac, qstages))
@@ -313,11 +317,19 @@ function dostep!(q, ark::ARK, after_stage)
 
   # Compute first explicit stage
   ex_stagetime = time + ex_rkc[1] * dt
-  rhs!(ex_K[1], Q[1], ex_stagetime; increment = false)
+  if isnothing(rhs!)
+    fill!.(components(ex_K[1]), 0)
+  else
+    rhs!(ex_K[1], Q[1], ex_stagetime; increment = false)
+  end
 
   # Compute first implicit stage
   im_stagetime = time + im_rkc[1] * dt
-  linrhs!(im_K[1], Q[1], im_stagetime; increment = false)
+  if isnothing(linrhs!)
+    fill!.(components(im_K[1]), 0)
+  else
+    linrhs!(im_K[1], Q[1], im_stagetime; increment = false)
+  end
 
   if !ark.split_rhs
     ex_K[1] .-= im_K[1]
@@ -332,15 +344,27 @@ function dostep!(q, ark::ARK, after_stage)
     end
 
     # Q^{(i)} = (I + dt ã_{ii} * L) \ Qhat
-    ldiv!(Q[i], fac, Qhat)
+    if isnothing(fac)
+      Q[i] .= Qhat
+    else
+      ldiv!(Q[i], fac, Qhat)
+    end
 
     # Compute explicit state i
     ex_stagetime = time + ex_rkc[i] * dt
-    rhs!(ex_K[i], Q[i], ex_stagetime; increment = false)
+    if isnothing(rhs!)
+      fill!.(components(ex_K[i]), 0)
+    else
+      rhs!(ex_K[i], Q[i], ex_stagetime; increment = false)
+    end
 
     # Compute implicit state i
     im_stagetime = time + im_rkc[i] * dt
-    linrhs!(im_K[i], Q[i], im_stagetime; increment = false)
+    if isnothing(linrhs!)
+      fill!.(components(im_K[i]), 0)
+    else
+      linrhs!(im_K[i], Q[i], im_stagetime; increment = false)
+    end
 
     if !ark.split_rhs
       ex_K[i] .-= im_K[i]
