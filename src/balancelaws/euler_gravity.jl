@@ -4,14 +4,18 @@ module EulerGravity
   import ..Atum
   using ..Atum: avg, logavg, roe_avg, constants
   using StaticArrays
+  using StaticArrays: SUnitRange
   using LinearAlgebra: I, norm
 
   struct EulerGravityLaw{FT, D, S, C} <: Atum.AbstractBalanceLaw{FT, D, S, C}
     function EulerGravityLaw{FT, D}(; γ = 7 // 5,
                                       grav = 981 // 100,
+                                      sphere = false,
                                       pde_level_balance = false) where {FT, D}
       S = 2 + D
-      C = (γ = FT(γ), grav = FT(grav), pde_level_balance = pde_level_balance)
+      γ = FT(γ)
+      grav = FT(grav)
+      C = (; γ, grav, sphere, pde_level_balance)
       new{FT, D, S, C}()
     end
   end
@@ -30,21 +34,29 @@ module EulerGravity
   end
 
   referencestate(law::EulerGravityLaw, x⃗) = SVector{0, eltype(law)}()
-  reference_ρ(law::EulerGravityLaw, aux) = @inbounds aux[ndims(law) + 1]
-  reference_p(law::EulerGravityLaw, aux) = @inbounds aux[ndims(law) + 2]
+  reference_ρ(law::EulerGravityLaw, aux) = @inbounds aux[ndims(law) + 2]
+  reference_p(law::EulerGravityLaw, aux) = @inbounds aux[ndims(law) + 3]
 
   function Atum.auxiliary(law::EulerGravityLaw, x⃗)
-    vcat(x⃗, referencestate(law, x⃗))
-  end
-
-  function coordinates(law::EulerGravityLaw, aux)
-    aux[SOneTo(ndims(law))]
+    FT = eltype(law)
+    grav = constants(law).grav
+    if constants(law).sphere
+      Φ = grav * norm(x⃗)
+      ∇Φ = grav * x⃗ / norm(x⃗)
+    else
+      Φ = grav * last(x⃗)
+      ∇Φ = zeros(MVector{ndims(law), FT})
+      ∇Φ[end] = grav
+      ∇Φ = SVector{ndims(law), FT}(∇Φ)
+    end
+    vcat(SVector(Φ), ∇Φ, referencestate(law, x⃗))
   end
 
   function geopotential(law, aux)
-    x⃗ = coordinates(law, aux)
-    z = last(x⃗)
-    constants(law).grav * z
+    @inbounds aux[1]
+  end
+  function geopotential_gradient(law, aux)
+    @inbounds aux[SUnitRange(2, 2 + ndims(law) - 1)]
   end
 
   function pressure(law::EulerGravityLaw, ρ, ρu⃗, ρe, Φ)
@@ -92,7 +104,7 @@ module EulerGravity
       ρ -= reference_ρ(law, aux)
     end
 
-    @inbounds dq[ix_ρu⃗[end]] -= ρ * constants(law).grav
+    @inbounds dq[ix_ρu⃗] .-= ρ * geopotential_gradient(law, aux)
   end
 
   function Atum.wavespeed(law::EulerGravityLaw, n⃗, q, aux)
