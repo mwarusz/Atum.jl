@@ -226,16 +226,9 @@ end
 
     @unroll for s in 1:Ns
       @unroll for d in directions
-        if 1 ∈ directions
-            l_F[i, j, k, d, s] = g[d, 1] * fijk[1, s]
-        else
-            l_F[i, j, k, d, s] = 0
-        end
-        if 2 ∈ directions
-          l_F[i, j, k, d, s] += g[d, 2] * fijk[2, s]
-        end
-        if 3 ∈ directions
-          l_F[i, j, k, d, s] += g[d, 3] * fijk[3, s]
+        l_F[i, j, k, d, s] = 0
+        @unroll for dd in 1:dim
+          l_F[i, j, k, d, s] += g[d, dd] * fijk[dd, s]
         end
         l_F[i, j, k, d, s] *= MJijk
       end
