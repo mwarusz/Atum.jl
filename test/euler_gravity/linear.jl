@@ -3,6 +3,8 @@ using Atum.EulerGravity
 
 using StaticArrays: SVector
 using WriteVTK
+using Printf
+using Test
 
 import Atum: boundarystate
 function boundarystate(law::LinearEulerGravityLaw, n⃗, q⁻, aux⁻, _)
@@ -25,13 +27,6 @@ function referencestate(law::EulerGravityLaw, x⃗)
 
   θref = FT(300)
   p0 = FT(1e5)
-  xc = FT(500)
-  zc = FT(350)
-  rc = FT(250)
-  δθc = FT(1 / 2)
-
-  r = sqrt((x - xc) ^ 2 + (z - zc) ^ 2)
-  δθ = r <= rc ? δθc : zero(FT)
 
   θ = θref
   π_exner = 1 - constants(law).grav / (cp_d * θ) * z
@@ -45,38 +40,14 @@ function referencestate(law::EulerGravityLaw, x⃗)
   SVector(ρ, EulerGravity.pressure(law, ρ, ρu⃗, ρe, Φ))
 end
 
-
-function initialcondition(law, x⃗)
+function initialcondition(law, x⃗, aux)
   FT = eltype(law)
-  x, z = x⃗
-
-  Φ = constants(law).grav * z
-
-  cv_d = FT(719)
-  cp_d = constants(law).γ * cv_d
-  R_d = cp_d - cv_d
-
-  θref = FT(300)
-  p0 = FT(1e5)
-  xc = FT(500)
-  zc = FT(350)
-  rc = FT(250)
-  δθc = FT(1 / 2)
-
-  r = sqrt((x - xc) ^ 2 + (z - zc) ^ 2)
-  δθ = r <= rc ? δθc : zero(FT)
-
-  θ = θref
-  π_exner = 1 - constants(law).grav / (cp_d * θ) * z
-  ρ = p0 / (R_d * θ) * π_exner ^ (cv_d / R_d)
-
-  ρu = FT(0)
-  ρv = FT(0)
-
-  T = θ * π_exner
-  ρe = ρ * (cv_d * T + Φ)
-
-  SVector(ρ, ρu, ρv, ρe)
+  ρ = EulerGravity.reference_ρ(law, aux)
+  p = EulerGravity.reference_p(law, aux)
+  ρu⃗ = SVector{2, FT}(0, 0)
+  Φ = EulerGravity.geopotential(law, aux)
+  ρe = EulerGravity.reference_ρe(law, p, ρ, Φ)
+  SVector(ρ, ρu⃗..., ρe)
 end
 
 function run(A, FT, N, K; volume_form=WeakForm(), outputvtk=true)
@@ -85,21 +56,27 @@ function run(A, FT, N, K; volume_form=WeakForm(), outputvtk=true)
   law = LinearEulerGravityLaw(EulerGravityLaw{FT, 2}())
   
   cell = LobattoCell{FT, A}(Nq, Nq)
-  vx = range(FT(0), stop=FT(1e3), length=K+1)
-  vz = range(FT(0), stop=FT(1e3), length=K+1)
-  grid = brickgrid(cell, (vx, vz); periodic = (true, false))
+  vx = range(FT(0), stop=FT(10e3), length=K+1)
+  vz = range(FT(0), stop=FT(10e3), length=K+1)
+  grid = brickgrid(cell, (vx, vz); periodic = (true, false),
+                   ordering = StackedOrdering{CartesianOrdering}())
 
   dg_nonlinear = DGSEM(; law=parent(law), grid, volume_form,
                        surface_numericalflux = RusanovFlux())
   dg = DGSEM(; law, grid, volume_form, surface_numericalflux = RusanovFlux(),
-             auxstate=dg_nonlinear.auxstate)
+             auxstate=dg_nonlinear.auxstate,
+             directions=(2,))
 
-  cfl = FT(1 // 3)
-  dt = cfl * step(vz) / N / 330
-  timeend = @isdefined(_testing) ? 10dt : FT(500)
+  cfl = FT(100)
+  dz = min_node_distance(grid, dims=(2,))
+  dt = cfl * dz / 330
+  timeend = FT(5 * 24 * 60 * 60)
+  
+  #numberofsteps = ceil(Int, timeend / dt)
+  #@show numberofsteps
  
   q = fieldarray(undef, law, grid)
-  q .= initialcondition.(Ref(law), points(grid))
+  q .= initialcondition.(Ref(law), points(grid), dg.auxstate)
   qref = similar(q)
   qref .= q
 
@@ -125,17 +102,54 @@ function run(A, FT, N, K; volume_form=WeakForm(), outputvtk=true)
     end
   end
 
-  odesolver = LSRK54(dg, q, dt)
+  odesolver = ARK23(nothing, dg, fieldarray(q), dt; split_rhs = true)
+
+  @info @sprintf """Starting
+  N           = %d
+  K           = %d
+  volume_form = %s
+  norm(q)     = %.16e
+  """ N K volume_form weightednorm(dg, q)
 
   outputvtk && do_output(0, FT(0), q)
-  solve!(q, timeend, odesolver; after_step=do_output)
+  solve!(q, timeend, odesolver; after_step=do_output, adjust_final=false)
   outputvtk && vtk_save(pvd)
+
+
+  errf = weightednorm(dg, q .- qref)
+  @info @sprintf """Finished
+  norm(q)      = %.16e
+  norm(q - qe) = %.16e
+  """ weightednorm(dg, q) errf
+  
+  errf
 end
 
 let
   A = Array
   FT = Float64
   N = 4
-  K = 10
-  run(A, FT, N, K)
+
+  nlevels = 2
+  expected_error = Dict()
+
+  expected_error[1] = 4.5574748976998530e-01
+  expected_error[2] = 1.4283626820403727e-02
+
+  @testset "linear model" begin
+    errors = zeros(FT, nlevels)
+    for l in 1:nlevels
+      K = 5 * 2 ^ (l - 1)
+      errf = run(A, FT, N, K)
+      errors[l] = errf
+      @test errors[l] ≈ expected_error[l]
+    end
+
+    if nlevels > 1
+      rates = log2.(errors[1:(nlevels-1)] ./ errors[2:nlevels])
+      @info "Convergence rates\n" *
+        join(["rate for levels $l → $(l + 1) = $(rates[l])" for l in 1:(nlevels - 1)], "\n")
+      @test rates[end] ≈ N + 1 atol = 0.1
+    end
+  end
 end
