@@ -16,7 +16,7 @@ reference_ρ(law::LinearEulerGravityLaw, aux) = reference_ρ(parent(law), aux)
 reference_p(law::LinearEulerGravityLaw, aux) = reference_p(parent(law), aux)
 function reference_ρe(law::LinearEulerGravityLaw, p, ρ, Φ)
   γ = constants(law).γ
-  p / (γ - 1) + ρ + Φ
+  p / (γ - 1) + ρ * Φ
 end
 
 Atum.auxiliary(law::LinearEulerGravityLaw, x⃗) = Atum.auxiliary(parent(law), x⃗)
