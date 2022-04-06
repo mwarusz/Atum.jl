@@ -29,7 +29,7 @@ function pressure(law::LinearEulerGravityLaw, ρ, ρu⃗, ρe, Φ)
   (γ - 1) * (ρe - ρ * Φ)
 end
 function soundspeed(law::LinearEulerGravityLaw, aux)
-  soundspeed(parent(law), reference_p(law, aux), reference_ρ(law, aux))
+  soundspeed(parent(law), reference_ρ(law, aux), reference_p(law, aux))
 end
 
 function Atum.flux(law::LinearEulerGravityLaw, q, aux)
