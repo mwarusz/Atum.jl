@@ -5,21 +5,15 @@ using StaticArrays: SVector
 using LinearAlgebra: norm, cross
 using WriteVTK
 
-#const _X = 125
 const _X = 1
 const _a = 6.371229e6 / _X
+const _H = 10e3
 
 longitude(x⃗) = @inbounds atan(x⃗[2], x⃗[1])
 latitude(x⃗) = @inbounds asin(x⃗[3] / norm(x⃗))
 
 import Atum: boundarystate, source!
-function boundarystate(law::EulerGravityLaw, n⃗, q⁻, aux⁻, _)
-  ρ⁻, ρu⃗⁻, ρe⁻ = EulerGravity.unpackstate(law, q⁻)
-  ρ⁺, ρe⁺ = ρ⁻, ρe⁻
-  ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
-  SVector(ρ⁺, ρu⃗⁺..., ρe⁺), aux⁻
-end
-function boundarystate(law::LinearEulerGravityLaw, n⃗, q⁻, aux⁻, _)
+function boundarystate(law::Union{EulerGravityLaw, LinearEulerGravityLaw}, n⃗, q⁻, aux⁻, _)
   ρ⁻, ρu⃗⁻, ρe⁻ = EulerGravity.unpackstate(law, q⁻)
   ρ⁺, ρe⁺ = ρ⁻, ρe⁻
   ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
@@ -48,7 +42,7 @@ function referencestate(law::EulerGravityLaw, x⃗)
   SVector(ρ_ref, p_ref)
 end
 
-function acousticwave(law, x⃗, aux)
+function acousticwave(law, x⃗, aux, add_perturbation=true)
   FT = eltype(law)
 
   cv_d = FT(719)
@@ -64,7 +58,7 @@ function acousticwave(law, x⃗, aux)
   Φ = EulerGravity.geopotential(law, aux)
 
   T₀ = FT(300)
-  H = FT(10e3)
+  H = FT(_H)
 
   α = FT(3)
   γ = FT(100)
@@ -73,7 +67,11 @@ function acousticwave(law, x⃗, aux)
   f = (1 + cos(FT(π) * β)) / 2
   g = sin(nv * FT(π) * z / H)
   Δp = γ * f * g
-  p = EulerGravity.reference_p(law, aux) + Δp
+  
+  p = EulerGravity.reference_p(law, aux)
+  if add_perturbation
+    p += Δp
+  end
 
   ρ = p / (R_d * T₀)
   ρu⃗ = SVector{3, FT}(0, 0, 0)
@@ -88,38 +86,32 @@ function run(A, FT, N, KH, KV; volume_form=WeakForm(), outputvtk=true)
   lin_law = LinearEulerGravityLaw(law)
   
   cell = LobattoCell{FT, A}(Nq, Nq, Nq)
-  modeltop = 10e3
-  vr = range(FT(_a), stop=FT(_a + modeltop), length=KV+1)
+  vr = range(FT(_a), stop=FT(_a + _H), length=KV+1)
   grid = cubedspheregrid(cell, vr, KH)
 
   dg = DGSEM(; law, grid,
-               #volume_form,
-               volume_form=FluxDifferencingForm(EntropyConservativeFlux()),
+               volume_form,
                surface_numericalflux = RusanovFlux())
 
-  dg_linear = DGSEM(; law=lin_law, grid, volume_form, surface_numericalflux = RusanovFlux(),
+  dg_linear = DGSEM(; law=lin_law, grid,
+                    volume_form = WeakForm(),
+                    surface_numericalflux = RusanovFlux(),
                     auxstate=dg.auxstate,
                     directions = (3,))
 
-  #cfl = FT(1 // 4)
-  #cfl *= 120
-  #dt = cfl * min_node_distance(grid) / FT(330)
 
-
-  element_size = (10e3 / KV)
+  element_size = (_H / KV)
   acoustic_speed = FT(330)
   dt_factor = 100
   dt = dt_factor * element_size / acoustic_speed / N^2
 
-  #cfl = FT(0.1)
-  #dt = cfl * min_node_distance(grid, dims=(1, 2)) / FT(330)
   timeend = @isdefined(_testing) ? 10dt : FT(33 * 60 * 60)
   @show ceil(Int, timeend / dt)
 
   q = fieldarray(undef, law, grid)
   q .= acousticwave.(Ref(law), points(grid), dg.auxstate)
   qref = fieldarray(undef, law, grid)
-  qref .= q
+  qref .= acousticwave.(Ref(law), points(grid), dg.auxstate, false)
 
   if outputvtk
     vtkdir = joinpath("output", "euler_gravity", "acousticwave")
@@ -146,7 +138,6 @@ function run(A, FT, N, KH, KV; volume_form=WeakForm(), outputvtk=true)
   end
 
 
-  #odesolver = LSRK54(dg_linear, q, dt)
   outputvtk && do_output(0, FT(0), q)
   odesolver = ARK23(dg, dg_linear, fieldarray(q), dt;
                     split_rhs = false,
@@ -154,20 +145,15 @@ function run(A, FT, N, KH, KV; volume_form=WeakForm(), outputvtk=true)
 
   solve!(q, timeend, odesolver; after_step=do_output, adjust_final = false)
   outputvtk && vtk_save(pvd)
-
-  errf = weightednorm(dg, q .- qref)
 end
 
 let
   A = Array
   FT = Float64
+  volume_form = FluxDifferencingForm(EntropyConservativeFlux())
+  
   N = 5
-  volume_form = WeakForm()
-  #volume_form = WeakForm()
-  for l in 1:1
-    KH = 10
-    KV = 5
-    errf = run(A, FT, N, KH, KV; volume_form)
-    @show l, errf
-  end
+  KH = 10
+  KV = 5
+  run(A, FT, N, KH, KV; volume_form)
 end
