@@ -23,6 +23,7 @@ Atum.auxiliary(law::LinearEulerGravityLaw, x⃗) = Atum.auxiliary(parent(law), x
 
 coordinates(law::LinearEulerGravityLaw, aux) = coordinates(parent(law), aux)
 geopotential(law::LinearEulerGravityLaw, aux) = geopotential(parent(law), aux)
+geopotential_gradient(law::LinearEulerGravityLaw, aux) = geopotential_gradient(parent(law), aux)
 
 function pressure(law::LinearEulerGravityLaw, ρ, ρu⃗, ρe, Φ)
   γ = constants(law).γ
@@ -58,6 +59,6 @@ function Atum.source!(law::LinearEulerGravityLaw, dq, q, aux, dim, directions)
     ix_ρ, ix_ρu⃗, _ = varsindices(law)
 
     @inbounds ρ = q[ix_ρ]
-    @inbounds dq[ix_ρu⃗[end]] -= ρ * constants(law).grav
+    @inbounds dq[ix_ρu⃗] .-= ρ * geopotential_gradient(law, aux)
   end
 end
