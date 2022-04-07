@@ -65,5 +65,5 @@ let
   volume_form = FluxDifferencingForm(CentralFlux())
   Δη = run(A, FT, N, K; volume_form)
 
-  @test abs(Δη) <= 10eps(FT)
+  @test abs(Δη) <= 30eps(FT)
 end

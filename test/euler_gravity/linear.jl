@@ -142,7 +142,7 @@ let
       K = 5 * 2 ^ (l - 1)
       errf = run(A, FT, N, K)
       errors[l] = errf
-      @test errors[l] ≈ expected_error[l]
+      @test errors[l] ≈ expected_error[l] rtol=1e-3
     end
 
     if nlevels > 1
