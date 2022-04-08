@@ -31,7 +31,8 @@ function run(A, FT, N, K; volume_form=WeakForm())
   dt = cfl * min_node_distance(grid) / Euler.soundspeed(law, FT(1), FT(1))
   timeend = FT(5.0)
   
-  q = square.(Ref(law), points(grid))
+  q = fieldarray(undef, law, grid)
+  q .= square.(Ref(law), points(grid))
   η0 = entropyintegral(dg, q)
 
   @info @sprintf """Starting

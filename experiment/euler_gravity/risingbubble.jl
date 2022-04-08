@@ -65,8 +65,10 @@ function run(A, FT, N, K; volume_form=WeakForm(), outputvtk=true)
   dt = cfl * step(vz) / N / 330
   timeend = @isdefined(_testing) ? 10dt : FT(500)
  
-  q = risingbubble.(Ref(law), points(grid))
-  qref = risingbubble.(Ref(law), points(grid), false)
+  q = fieldarray(undef, law, grid)
+  q .= risingbubble.(Ref(law), points(grid))
+  qref = fieldarray(undef, law, grid)
+  qref .= risingbubble.(Ref(law), points(grid), false)
 
   if outputvtk
     vtkdir = joinpath("output", "euler_gravity", "risingbubble")

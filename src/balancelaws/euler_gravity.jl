@@ -83,16 +83,19 @@ module EulerGravity
     hcat(fρ, fρu⃗, fρe)
   end
 
-  function Atum.nonconservative_term!(law::EulerGravityLaw, dq, q, aux)
-    ix_ρ, ix_ρu⃗, _ = varsindices(law)
+  function Atum.nonconservative_term!(law::EulerGravityLaw, dq, q, aux,
+                                      directions, dim)
+    if dim ∈ directions
+      ix_ρ, ix_ρu⃗, _ = varsindices(law)
 
-    @inbounds ρ = q[ix_ρ]
+      @inbounds ρ = q[ix_ρ]
 
-    if constants(law).pde_level_balance
-      ρ -= reference_ρ(law, aux)
+      if constants(law).pde_level_balance
+        ρ -= reference_ρ(law, aux)
+      end
+
+      @inbounds dq[ix_ρu⃗[end]] -= ρ * constants(law).grav
     end
-
-    @inbounds dq[ix_ρu⃗[end]] -= ρ * constants(law).grav
   end
 
   function Atum.wavespeed(law::EulerGravityLaw, n⃗, q, aux)
@@ -313,4 +316,6 @@ module EulerGravity
 
     ecflux - SVector(Dρ, Dρu⃗..., Dρe) / 2
   end
+
+  include("linear_euler_gravity.jl")
 end
