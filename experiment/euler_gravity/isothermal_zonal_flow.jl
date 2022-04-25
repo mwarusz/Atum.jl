@@ -11,8 +11,10 @@ const _a = 6.371229e6 / _X
 longitude(x⃗) = @inbounds atan(x⃗[2], x⃗[1])
 latitude(x⃗) = @inbounds asin(x⃗[3] / norm(x⃗))
 
+struct IsothermalZonalFlow <: AbstractProblem end
+
 import Atum: boundarystate, source!
-function boundarystate(law::Union{LinearEulerGravityLaw, EulerGravityLaw}, n⃗, q⁻, aux⁻, _)
+function boundarystate(law::Union{LinearEulerGravityLaw, EulerGravityLaw}, ::IsothermalZonalFlow, n⃗, q⁻, aux⁻, _)
   ρ⁻, ρu⃗⁻, ρe⁻ = EulerGravity.unpackstate(law, q⁻)
   ρ⁺, ρe⁺ = ρ⁻, ρe⁻
   ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
@@ -97,7 +99,7 @@ end
 function run(A, FT, N, KH, KV; volume_form=WeakForm(), outputvtk=true)
   Nq = N + 1
 
-  law = EulerGravityLaw{FT, 3}(sphere=true)
+  law = EulerGravityLaw{FT, 3}(sphere=true, problem=IsothermalZonalFlow())
   lin_law = LinearEulerGravityLaw(law)
   
   cell = LobattoCell{FT, A}(Nq, Nq, Nq)

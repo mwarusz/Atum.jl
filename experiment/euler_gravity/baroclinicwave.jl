@@ -14,15 +14,17 @@ const _grav = 9.80616
 longitude(x⃗) = @inbounds atan(x⃗[2], x⃗[1])
 latitude(x⃗) = @inbounds asin(x⃗[3] / norm(x⃗))
 
+struct BaroclinicWave <: AbstractProblem end
+
 import Atum: boundarystate, source!
-function boundarystate(law::Union{LinearEulerGravityLaw, EulerGravityLaw}, n⃗, q⁻, aux⁻, _)
+function boundarystate(law::Union{LinearEulerGravityLaw, EulerGravityLaw}, ::BaroclinicWave, n⃗, q⁻, aux⁻, _)
   ρ⁻, ρu⃗⁻, ρe⁻ = EulerGravity.unpackstate(law, q⁻)
   ρ⁺, ρe⁺ = ρ⁻, ρe⁻
   ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
   SVector(ρ⁺, ρu⃗⁺..., ρe⁺), aux⁻
 end
 
-function source!(law::EulerGravityLaw, dq, q, aux, dim, directions)
+function source!(law::EulerGravityLaw, ::BaroclinicWave, dq, q, aux, dim, directions)
   if dim ∈ directions
     FT = eltype(law)
     _, ix_ρu⃗, _ = EulerGravity.varsindices(law)
@@ -172,7 +174,7 @@ end
 function run(A, FT, N, KH, KV; volume_form=WeakForm(), outputvtk=true)
   Nq = N + 1
 
-  law = EulerGravityLaw{FT, 3}(sphere=true, grav=_grav)
+  law = EulerGravityLaw{FT, 3}(sphere=true, grav=_grav, problem=BaroclinicWave())
   lin_law = LinearEulerGravityLaw(law)
   
   cell = LobattoCell{FT, A}(Nq, Nq, Nq)

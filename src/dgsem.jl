@@ -236,6 +236,7 @@ end
 
     fill!(dqijk, -zero(FT))
     source!(law, dqijk, qijk, auxijk, dim, directions)
+    source!(law, problem(law), dqijk, qijk, auxijk, dim, directions)
     nonconservative_term!(law, dqijk, qijk, auxijk, directions, dim)
 
     @synchronize
@@ -360,6 +361,7 @@ end
       end
 
       source!(law, dqijk, q1, aux1, dim, directions)
+      source!(law, problem(law), dqijk, q1, aux1, dim, directions)
 
       MJIijk = 1 / pencil_MJ[k]
       @unroll for n in 1:Nq
@@ -477,6 +479,7 @@ end
     end
 
     source!(law, dqijk, q1, aux1, dim, (dir,))
+    source!(law, problem(law), dqijk, q1, aux1, dim, (dir,))
 
     @synchronize
 
@@ -556,7 +559,7 @@ end
           q⁺ = q[id⁺]
           aux⁺ = auxstate[id⁺]
         else
-          q⁺, aux⁺ = boundarystate(law, n⃗, q⁻, aux⁻, boundarytag)
+          q⁺, aux⁺ = boundarystate(law, problem(law), n⃗, q⁻, aux⁻, boundarytag)
         end
 
         nf = surfaceflux(numericalflux, law, n⃗, q⁻, aux⁻, q⁺, aux⁺)

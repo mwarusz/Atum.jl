@@ -5,8 +5,10 @@ using Bennu: fieldarray
 using StaticArrays: SVector
 using WriteVTK
 
+struct BickleyJet <: AbstractProblem end
+
 import Atum: boundarystate
-function boundarystate(law::ShallowWaterLaw, n⃗, q⁻, aux⁻, _)
+function boundarystate(law::ShallowWaterLaw, ::BickleyJet, n⃗, q⁻, aux⁻, _)
   ρ⁻, ρu⃗⁻, ρθ⁻ = ShallowWater.unpackstate(law, q⁻)
   ρ⁺, ρθ⁺ = ρ⁻, ρθ⁻
   ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
@@ -39,7 +41,7 @@ end
 function run(A, FT, N, K; volume_form=WeakForm(), outputvtk=true)
   Nq = N + 1
 
-  law = ShallowWaterLaw{FT, 2}()
+  law = ShallowWaterLaw{FT, 2}(problem=BickleyJet())
   
   cell = LobattoCell{FT, A}(Nq, Nq)
   v1d = range(FT(-2π), stop=FT(2π), length=K+1)

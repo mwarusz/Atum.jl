@@ -6,8 +6,10 @@ using WriteVTK
 using Printf
 using Test
 
+struct LinearTest <: AbstractProblem end
+
 import Atum: boundarystate
-function boundarystate(law::LinearEulerGravityLaw, n⃗, q⁻, aux⁻, _)
+function boundarystate(law::LinearEulerGravityLaw, ::LinearTest, n⃗, q⁻, aux⁻, _)
   ρ⁻, ρu⃗⁻, ρe⁻ = EulerGravity.unpackstate(law, q⁻)
   ρ⁺, ρe⁺ = ρ⁻, ρe⁻
   ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
@@ -53,7 +55,7 @@ end
 function run(A, FT, N, K; volume_form=WeakForm(), outputvtk=true)
   Nq = N + 1
 
-  law = LinearEulerGravityLaw(EulerGravityLaw{FT, 2}())
+  law = LinearEulerGravityLaw(EulerGravityLaw{FT, 2}(problem=LinearTest()))
   
   cell = LobattoCell{FT, A}(Nq, Nq)
   vx = range(FT(0), stop=FT(10e3), length=K+1)

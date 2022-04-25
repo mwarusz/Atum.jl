@@ -5,6 +5,8 @@ using Bennu: fieldarray
 using PGFPlotsX
 using StaticArrays: SVector
 
+struct Sod <: AbstractProblem end
+
 function sod(law, x⃗)
   FT = eltype(law)
   ρ = x⃗[1] < 1 // 2 ? 1 : 1 // 8
@@ -15,7 +17,7 @@ function sod(law, x⃗)
 end
 
 import Atum: boundarystate
-function boundarystate(law::EulerLaw, n⃗, q⁻, aux⁻, bctag)
+function boundarystate(law::EulerLaw, ::Sod, n⃗, q⁻, aux⁻, bctag)
   FT = eltype(law)
   bctag == 1 ? sod(law, SVector(FT(0))) : sod(law, SVector(FT(1))), aux⁻
 end
@@ -23,7 +25,7 @@ end
 function run(A, FT, N, K; volume_form=WeakForm())
   Nq = N + 1
 
-  law = EulerLaw{FT, 1}()
+  law = EulerLaw{FT, 1}(problem = Sod())
 
   cell = LobattoCell{FT, A}(Nq)
   v1d = range(FT(0), stop=FT(1), length=K+1)

@@ -7,16 +7,18 @@ module EulerGravity
   using StaticArrays: SUnitRange
   using LinearAlgebra: I, norm
 
-  struct EulerGravityLaw{FT, D, S, C} <: Atum.AbstractBalanceLaw{FT, D, S, C}
+  struct EulerGravityLaw{FT, D, S, C, P} <: Atum.AbstractBalanceLaw{FT, D, S, C}
+    problem::P
     function EulerGravityLaw{FT, D}(; γ = 7 // 5,
                                       grav = 981 // 100,
                                       sphere = false,
-                                      pde_level_balance = false) where {FT, D}
+                                      pde_level_balance = false,
+                                      problem::P = Atum.DummyProblem()) where {FT, D, P}
       S = 2 + D
       γ = FT(γ)
       grav = FT(grav)
       C = (; γ, grav, sphere, pde_level_balance)
-      new{FT, D, S, C}()
+      new{FT, D, S, C, P}(problem)
     end
   end
 

@@ -7,6 +7,7 @@ struct LinearEulerGravityLaw{FT, D, S, C, P} <: Atum.AbstractBalanceLaw{FT, D, S
   end
 end
 Base.parent(law::LinearEulerGravityLaw) = law.parent
+Atum.problem(law::LinearEulerGravityLaw) = Atum.problem(parent(law))
 
 varsindices(law::LinearEulerGravityLaw) = varsindices(parent(law))
 unpackstate(law::LinearEulerGravityLaw, q) = unpackstate(parent(law), q)

@@ -12,8 +12,10 @@ const _H = 10e3
 longitude(x⃗) = @inbounds atan(x⃗[2], x⃗[1])
 latitude(x⃗) = @inbounds asin(x⃗[3] / norm(x⃗))
 
+struct AcousticWave <: AbstractProblem end
+
 import Atum: boundarystate, source!
-function boundarystate(law::Union{EulerGravityLaw, LinearEulerGravityLaw}, n⃗, q⁻, aux⁻, _)
+function boundarystate(law::Union{EulerGravityLaw, LinearEulerGravityLaw}, ::AcousticWave, n⃗, q⁻, aux⁻, _)
   ρ⁻, ρu⃗⁻, ρe⁻ = EulerGravity.unpackstate(law, q⁻)
   ρ⁺, ρe⁺ = ρ⁻, ρe⁻
   ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
@@ -82,7 +84,7 @@ end
 function run(A, FT, N, KH, KV; volume_form=WeakForm(), outputvtk=true)
   Nq = N + 1
 
-  law = EulerGravityLaw{FT, 3}(sphere=true)
+  law = EulerGravityLaw{FT, 3}(sphere=true, problem=AcousticWave())
   lin_law = LinearEulerGravityLaw(law)
   
   cell = LobattoCell{FT, A}(Nq, Nq, Nq)

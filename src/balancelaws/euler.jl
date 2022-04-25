@@ -6,11 +6,13 @@ module Euler
   using StaticArrays
   using LinearAlgebra: I, norm, cross
 
-  struct EulerLaw{FT, D, S, C} <: Atum.AbstractBalanceLaw{FT, D, S, C}
-    function EulerLaw{FT, D}(; γ = 7 // 5) where {FT, D}
+  struct EulerLaw{FT, D, S, C, P} <: Atum.AbstractBalanceLaw{FT, D, S, C}
+    problem::P
+    function EulerLaw{FT, D}(; γ = 7 // 5,
+                             problem::P = Atum.DummyProblem()) where {FT, D, P}
       S = 2 + D
       C = (γ = FT(γ),)
-      new{FT, D, S, C}()
+      new{FT, D, S, C, P}(problem)
     end
   end
 

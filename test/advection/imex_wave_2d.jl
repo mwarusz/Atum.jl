@@ -14,7 +14,9 @@ if !@isdefined integration_testing
   )
 end
 
-function Atum.boundarystate(law::AdvectionLaw, n⃗, q⁻, aux⁻, _)
+struct IMEXTest <: AbstractProblem end
+
+function Atum.boundarystate(law::AdvectionLaw, ::IMEXTest, n⃗, q⁻, aux⁻, _)
     if dot(constants(law).u⃗, n⃗) ≤ 0
         T = eltype(q⁻)
         return SVector(zero(T)), aux⁻
@@ -37,7 +39,7 @@ function run(A, FT, N, K; volume_form=WeakForm(), split_rhs = true)
   Nq = N + 1
 
   u⃗ = FT.((1, 0.3))
-  law = AdvectionLaw{FT, 2}(u⃗)
+  law = AdvectionLaw{FT, 2}(u⃗, problem=IMEXTest())
 
   cell = LobattoCell{FT, A}(Nq, Nq)
   v1d = range(FT(-1), stop=FT(1), length=K+1)
