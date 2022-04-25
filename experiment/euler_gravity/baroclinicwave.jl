@@ -47,7 +47,7 @@ function cartesian(v⃗, x⃗)
 end
 
 import Atum.EulerGravity: referencestate
-function referencestate(law::EulerGravityLaw, x⃗)
+function referencestate(law::EulerGravityLaw, ::BaroclinicWave, x⃗)
   FT = eltype(law)
   r = norm(x⃗)
   z = r - _a

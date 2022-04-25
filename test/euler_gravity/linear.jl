@@ -17,7 +17,7 @@ function boundarystate(law::LinearEulerGravityLaw, ::LinearTest, n⃗, q⁻, aux
 end
 
 import Atum.EulerGravity: referencestate
-function referencestate(law::EulerGravityLaw, x⃗)
+function referencestate(law::EulerGravityLaw, ::LinearTest, x⃗)
   FT = eltype(law)
   x, z = x⃗
 

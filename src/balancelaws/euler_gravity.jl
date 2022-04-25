@@ -35,7 +35,7 @@ module EulerGravity
     @inbounds q[ix_ρ], q[ix_ρu⃗], q[ix_ρe]
   end
 
-  referencestate(law::EulerGravityLaw, x⃗) = SVector{0, eltype(law)}()
+  referencestate(law::EulerGravityLaw, ::Atum.AbstractProblem, x⃗) = SVector{0, eltype(law)}()
   reference_ρ(law::EulerGravityLaw, aux) = @inbounds aux[ndims(law) + 2]
   reference_p(law::EulerGravityLaw, aux) = @inbounds aux[ndims(law) + 3]
 
@@ -51,7 +51,7 @@ module EulerGravity
       ∇Φ[end] = grav
       ∇Φ = SVector{ndims(law), FT}(∇Φ)
     end
-    vcat(SVector(Φ), ∇Φ, referencestate(law, x⃗))
+    vcat(SVector(Φ), ∇Φ, referencestate(law, Atum.problem(law), x⃗))
   end
 
   function geopotential(law, aux)

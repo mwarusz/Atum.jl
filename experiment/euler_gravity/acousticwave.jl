@@ -23,7 +23,7 @@ function boundarystate(law::Union{EulerGravityLaw, LinearEulerGravityLaw}, ::Aco
 end
 
 import Atum.EulerGravity: referencestate
-function referencestate(law::EulerGravityLaw, x⃗)
+function referencestate(law::EulerGravityLaw, ::AcousticWave, x⃗)
   FT = eltype(law)
   r = norm(x⃗)
   z = r - _a

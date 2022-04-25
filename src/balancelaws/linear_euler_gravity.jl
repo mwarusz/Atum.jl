@@ -12,7 +12,7 @@ Atum.problem(law::LinearEulerGravityLaw) = Atum.problem(parent(law))
 varsindices(law::LinearEulerGravityLaw) = varsindices(parent(law))
 unpackstate(law::LinearEulerGravityLaw, q) = unpackstate(parent(law), q)
 
-referencestate(law::LinearEulerGravityLaw, x⃗) = referencestate(parent(law), x⃗)
+referencestate(law::LinearEulerGravityLaw, ::Atum.AbstractProblem, x⃗) = referencestate(parent(law), problem(law), x⃗)
 reference_ρ(law::LinearEulerGravityLaw, aux) = reference_ρ(parent(law), aux)
 reference_p(law::LinearEulerGravityLaw, aux) = reference_p(parent(law), aux)
 function reference_ρe(law::LinearEulerGravityLaw, p, ρ, Φ)
