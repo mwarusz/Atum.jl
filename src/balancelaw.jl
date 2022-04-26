@@ -1,6 +1,12 @@
 export numberofstates, constants
+export AbstractProblem
+
 
 abstract type AbstractBalanceLaw{FT, D, S, C} end
+
+abstract type AbstractProblem end
+struct DummyProblem <: AbstractProblem end
+problem(law::AbstractBalanceLaw) = law.problem
 
 Base.eltype(::AbstractBalanceLaw{FT}) where {FT} = FT
 Base.ndims(::AbstractBalanceLaw{FT, D}) where {FT, D} = D
@@ -11,8 +17,9 @@ auxiliary(law::AbstractBalanceLaw, x⃗) = SVector(nothing)
 
 function flux end
 function wavespeed end
-boundarystate(::AbstractBalanceLaw, n⃗, q⁻, aux⁻, tag) = q⁻, aux⁻
+boundarystate(::AbstractBalanceLaw, ::AbstractProblem, n⃗, q⁻, aux⁻, tag) = q⁻, aux⁻
 source!(::AbstractBalanceLaw, dq, q, aux, dim, directions) = nothing
+source!(::AbstractBalanceLaw, ::AbstractProblem, dq, q, aux, dim, directions) = nothing
 nonconservative_term!(::AbstractBalanceLaw, dq, q, aux, directions, dim) = nothing
 function Bennu.fieldarray(init, law::AbstractBalanceLaw,
                           grid::Bennu.AbstractGrid)

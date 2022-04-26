@@ -4,8 +4,10 @@ using Atum.EulerGravity
 using StaticArrays: SVector
 using WriteVTK
 
+struct RisingBubble <: AbstractProblem end
+
 import Atum: boundarystate
-function boundarystate(law::EulerGravityLaw, n⃗, q⁻, aux⁻, _)
+function boundarystate(law::EulerGravityLaw, ::RisingBubble, n⃗, q⁻, aux⁻, _)
   ρ⁻, ρu⃗⁻, ρe⁻ = EulerGravity.unpackstate(law, q⁻)
   ρ⁺, ρe⁺ = ρ⁻, ρe⁻
   ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
@@ -51,7 +53,7 @@ end
 function run(A, FT, N, K; volume_form=WeakForm(), outputvtk=true)
   Nq = N + 1
 
-  law = EulerGravityLaw{FT, 2}()
+  law = EulerGravityLaw{FT, 2}(problem=RisingBubble())
   
   cell = LobattoCell{FT, A}(Nq, Nq)
   vx = range(FT(0), stop=FT(1e3), length=K+1)

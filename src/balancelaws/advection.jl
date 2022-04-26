@@ -5,9 +5,11 @@ module Advection
   using ..Atum: constants
   using StaticArrays: SVector
 
-  struct AdvectionLaw{FT, D, C} <: Atum.AbstractBalanceLaw{FT, D, 1, C}
-    function AdvectionLaw{FT, D}(u⃗ = ntuple(d->FT(1), D)) where {FT, D}
-      new{FT, D, (;u⃗)}()
+  struct AdvectionLaw{FT, D, C, P} <: Atum.AbstractBalanceLaw{FT, D, 1, C}
+    problem::P
+    function AdvectionLaw{FT, D}(u⃗ = ntuple(d->FT(1), D);
+                                 problem::P = Atum.DummyProblem()) where {FT, D, P}
+      new{FT, D, (;u⃗), P}(problem)
     end
   end
 

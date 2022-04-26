@@ -6,8 +6,10 @@ using LinearAlgebra: norm
 using StaticArrays: SVector
 using WriteVTK
 
+struct GravityWave <: AbstractProblem end
+
 import Atum: boundarystate
-function boundarystate(law::EulerGravityLaw, n⃗, q⁻, aux⁻, _)
+function boundarystate(law::EulerGravityLaw, ::GravityWave, n⃗, q⁻, aux⁻, _)
   ρ⁻, ρu⃗⁻, ρe⁻ = EulerGravity.unpackstate(law, q⁻)
   ρ⁺, ρe⁺ = ρ⁻, ρe⁻
   ρu⃗⁺ = ρu⃗⁻ - 2 * (n⃗' * ρu⃗⁻) * n⃗
@@ -15,7 +17,7 @@ function boundarystate(law::EulerGravityLaw, n⃗, q⁻, aux⁻, _)
 end
 
 import Atum.EulerGravity: referencestate
-function referencestate(law::EulerGravityLaw, x⃗)
+function referencestate(law::EulerGravityLaw, ::GravityWave, x⃗)
   FT = eltype(law)
   x, z = x⃗
 
@@ -153,7 +155,7 @@ end
 function run(A, FT, N, KX, KY; volume_form=WeakForm(), outputvtk=true)
   Nq = N + 1
 
-  law = EulerGravityLaw{FT, 2}(pde_level_balance=true)
+  law = EulerGravityLaw{FT, 2}(pde_level_balance=true, problem=GravityWave())
   
   cell = LobattoCell{FT, A}(Nq, Nq)
   vx = range(FT(0), stop=FT(300e3), length=KX+1)

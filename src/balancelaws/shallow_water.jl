@@ -6,11 +6,13 @@ module ShallowWater
   using StaticArrays
   using LinearAlgebra: I
 
-  struct ShallowWaterLaw{FT, D, S, C} <: Atum.AbstractBalanceLaw{FT, D, S, C}
-    function ShallowWaterLaw{FT, D}(; grav = 10) where {FT, D}
+  struct ShallowWaterLaw{FT, D, S, C, P} <: Atum.AbstractBalanceLaw{FT, D, S, C}
+    problem::P
+    function ShallowWaterLaw{FT, D}(; grav = 10,
+                                    problem::P = Atum.DummyProblem()) where {FT, D, P}
       S = 2 + D
       C = (grav = FT(grav),)
-      new{FT, D, S, C}()
+      new{FT, D, S, C, P}(problem)
     end
   end
 
