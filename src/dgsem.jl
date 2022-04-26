@@ -234,7 +234,9 @@ end
       end
     end
 
-    fill!(dqijk, -zero(FT))
+    @unroll for s in 1:Ns
+      dqijk[s] = -zero(FT)
+    end
     source!(law, dqijk, qijk, auxijk, dim, directions)
     source!(law, problem(law), dqijk, qijk, auxijk, dim, directions)
     nonconservative_term!(law, dqijk, qijk, auxijk, directions, dim)
@@ -351,7 +353,9 @@ end
 
       @synchronize
 
-      fill!(dqijk, -zero(FT))
+      @unroll for s in 1:Ns
+        dqijk[s] = -zero(FT)
+      end
 
       @unroll for s in 1:Ns
         q1[s] = l_q[i, j, s]
@@ -469,7 +473,9 @@ end
       l_g[ijk, d] = MJijk * metrics[ijk, e].g[dir, d]
     end
 
-    fill!(dqijk, -zero(FT))
+    @unroll for s in 1:Ns
+      dqijk[s] = -zero(FT)
+    end
 
     @unroll for s in 1:Ns
       q1[s] = q[ijk, e][s]
