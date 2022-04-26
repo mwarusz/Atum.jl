@@ -28,7 +28,7 @@ Bennu.referencecell(dg::DGSEM) = referencecell(dg.grid)
 function Adapt.adapt_structure(to, dg::DGSEM)
   names = fieldnames(DGSEM)
   args = ntuple(j->adapt(to, getfield(dg, names[j])), length(names))
-  DGSEM{typeof.(args)...}(args...)
+  DGSEM{typeof.(args)..., directions(dg)}(args...)
 end
 
 function DGSEM(; law, grid, surface_numericalflux,
