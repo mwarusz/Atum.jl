@@ -204,9 +204,10 @@ end
     Nq1 = Nq
     Nq2 = dim > 1 ? Nq : 1
     Nq3 = dim > 2 ? Nq : 1
+    Ndir = length(directions)
   end
 
-  l_F = @localmem FT (Nq1, Nq2, Nq3, dim, Ns)
+  l_F = @localmem FT (Nq1, Nq2, Nq3, Ndir, Ns)
   dqijk = @private FT (Ns,)
   p_MJ = @private FT (1,)
 
@@ -225,10 +226,11 @@ end
     fijk = flux(law, qijk, auxijk)
 
     @unroll for s in 1:Ns
-      @unroll for d in directions
+      @unroll for d in 1:Ndir
+        dir = directions[d]
         l_F[i, j, k, d, s] = 0
         @unroll for dd in 1:dim
-          l_F[i, j, k, d, s] += g[d, dd] * fijk[dd, s]
+          l_F[i, j, k, d, s] += g[dir, dd] * fijk[dd, s]
         end
         l_F[i, j, k, d, s] *= MJijk
       end
@@ -251,14 +253,17 @@ end
       Dnj = D[n, j] * MJIijk
       Dnk = D[n, k] * MJIijk
       @unroll for s in 1:Ns
+        dir = 1
         if 1 ∈ directions
-          dqijk[s] += Dni * l_F[n, j, k, 1, s]
+          dqijk[s] += Dni * l_F[n, j, k, dir, s]
+          dir += 1
         end
         if 2 ∈ directions
-          dqijk[s] += Dnj * l_F[i, n, k, 2, s]
+          dqijk[s] += Dnj * l_F[i, n, k, dir, s]
+          dir += 1
         end
         if 3 ∈ directions
-          dqijk[s] += Dnk * l_F[i, j, n, 3, s]
+          dqijk[s] += Dnk * l_F[i, j, n, dir, s]
         end
       end
     end
