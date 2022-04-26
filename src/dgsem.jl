@@ -327,7 +327,7 @@ end
         pencil_q[s, k] = q[ijk, e][s]
       end
       @unroll for d in directions
-        pencil_aux[d, k] = aux[ijk, e][d]
+        pencil_aux[d, k] = auxstate[ijk, e][d]
       end
       if dim > 2
         @unroll for d in 1:dim
