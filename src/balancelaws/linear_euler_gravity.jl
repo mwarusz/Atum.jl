@@ -47,7 +47,7 @@ function Atum.flux(law::LinearEulerGravityLaw, q, aux)
   ref_ρe = reference_ρe(law, ref_p, ref_ρ, Φ)
 
   fρ = ρu⃗
-  fρu⃗ = p * I
+  fρu⃗ = SMatrix{ndims(law), ndims(law), eltype(law)}(p * I)
   fρe = ((ref_ρe + ref_p) / ref_ρ) * ρu⃗
 
   hcat(fρ, fρu⃗, fρe)
