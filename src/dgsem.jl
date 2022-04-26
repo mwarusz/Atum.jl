@@ -28,7 +28,7 @@ Bennu.referencecell(dg::DGSEM) = referencecell(dg.grid)
 function Adapt.adapt_structure(to, dg::DGSEM)
   names = fieldnames(DGSEM)
   args = ntuple(j->adapt(to, getfield(dg, names[j])), length(names))
-  DGSEM{typeof.(args)...}(args...)
+  DGSEM{typeof.(args)..., directions(dg)}(args...)
 end
 
 function DGSEM(; law, grid, surface_numericalflux,
@@ -128,7 +128,7 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; increment, dep
   dim = ndims(cell)
   Naux = eltype(eltype(dg.auxstate)) === Nothing ? 0 : length(eltype(dg.auxstate))
 
-  kernel_type = :per_dir
+  kernel_type = Nq <= 6 ? :per_dir : :naive
   if kernel_type == :naive
     # FIXME: kernel not updated to support directions
     @assert directions(dg) == 1:ndims(dg.law)
@@ -204,9 +204,10 @@ end
     Nq1 = Nq
     Nq2 = dim > 1 ? Nq : 1
     Nq3 = dim > 2 ? Nq : 1
+    Ndir = length(directions)
   end
 
-  l_F = @localmem FT (Nq1, Nq2, Nq3, dim, Ns)
+  l_F = @localmem FT (Nq1, Nq2, Nq3, Ndir, Ns)
   dqijk = @private FT (Ns,)
   p_MJ = @private FT (1,)
 
@@ -225,16 +226,19 @@ end
     fijk = flux(law, qijk, auxijk)
 
     @unroll for s in 1:Ns
-      @unroll for d in directions
+      @unroll for d in 1:Ndir
+        dir = directions[d]
         l_F[i, j, k, d, s] = 0
         @unroll for dd in 1:dim
-          l_F[i, j, k, d, s] += g[d, dd] * fijk[dd, s]
+          l_F[i, j, k, d, s] += g[dir, dd] * fijk[dd, s]
         end
         l_F[i, j, k, d, s] *= MJijk
       end
     end
 
-    fill!(dqijk, -zero(FT))
+    @unroll for s in 1:Ns
+      dqijk[s] = -zero(FT)
+    end
     source!(law, dqijk, qijk, auxijk, dim, directions)
     source!(law, problem(law), dqijk, qijk, auxijk, dim, directions)
     nonconservative_term!(law, dqijk, qijk, auxijk, directions, dim)
@@ -249,14 +253,17 @@ end
       Dnj = D[n, j] * MJIijk
       Dnk = D[n, k] * MJIijk
       @unroll for s in 1:Ns
+        dir = 1
         if 1 ∈ directions
-          dqijk[s] += Dni * l_F[n, j, k, 1, s]
+          dqijk[s] += Dni * l_F[n, j, k, dir, s]
+          dir += 1
         end
         if 2 ∈ directions
-          dqijk[s] += Dnj * l_F[i, n, k, 2, s]
+          dqijk[s] += Dnj * l_F[i, n, k, dir, s]
+          dir += 1
         end
         if 3 ∈ directions
-          dqijk[s] += Dnk * l_F[i, j, n, 3, s]
+          dqijk[s] += Dnk * l_F[i, j, n, dir, s]
         end
       end
     end
@@ -320,7 +327,7 @@ end
         pencil_q[s, k] = q[ijk, e][s]
       end
       @unroll for d in directions
-        pencil_aux[d, k] = aux[ijk, e][d]
+        pencil_aux[d, k] = auxstate[ijk, e][d]
       end
       if dim > 2
         @unroll for d in 1:dim
@@ -351,7 +358,9 @@ end
 
       @synchronize
 
-      fill!(dqijk, -zero(FT))
+      @unroll for s in 1:Ns
+        dqijk[s] = -zero(FT)
+      end
 
       @unroll for s in 1:Ns
         q1[s] = l_q[i, j, s]
@@ -469,7 +478,9 @@ end
       l_g[ijk, d] = MJijk * metrics[ijk, e].g[dir, d]
     end
 
-    fill!(dqijk, -zero(FT))
+    @unroll for s in 1:Ns
+      dqijk[s] = -zero(FT)
+    end
 
     @unroll for s in 1:Ns
       q1[s] = q[ijk, e][s]

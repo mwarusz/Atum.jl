@@ -10,7 +10,8 @@ function Bennu.batchedbandedmatrix(
         dg(dq, q, time; increment=false)
         return Event(getdevice(dg))
     end
-    mat = Bennu.batchedbandedmatrix(matvec!, dg.grid, dq, q, element_bandwidth)
+    threads = 256
+    mat = Bennu.batchedbandedmatrix(matvec!, dg.grid, dq, q, element_bandwidth, threads)
 end
 
 function batchedbandedlu(
