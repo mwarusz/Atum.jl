@@ -128,7 +128,7 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; increment, dep
   dim = ndims(cell)
   Naux = eltype(eltype(dg.auxstate)) === Nothing ? 0 : length(eltype(dg.auxstate))
 
-  kernel_type = :per_dir
+  kernel_type = Nq <= 6 ? :per_dir : :naive
   if kernel_type == :naive
     # FIXME: kernel not updated to support directions
     @assert directions(dg) == 1:ndims(dg.law)
