@@ -5,8 +5,12 @@ export FluxDifferencingForm
 abstract type AbstractVolumeForm end
 
 struct WeakForm <: AbstractVolumeForm end
-struct FluxDifferencingForm{VNF} <: AbstractVolumeForm
+struct FluxDifferencingForm{VNF, K} <: AbstractVolumeForm
   volume_numericalflux::VNF
+  kernel_type::K
+end
+function FluxDifferencingForm(volume_numerical_flux, kernel_type = :per_dir)
+  FluxDifferencingForm(volume_numerical_flux, kernel_type)
 end
 
 struct DGSEM{L, G, A1, A2, A3, A4, VF, SNF, DIR}
@@ -128,7 +132,7 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; increment, dep
   dim = ndims(cell)
   Naux = eltype(eltype(dg.auxstate)) === Nothing ? 0 : length(eltype(dg.auxstate))
 
-  kernel_type = Nq <= 6 ? :per_dir : :naive
+  kernel_type = form.kernel_type
   if kernel_type == :naive
     # FIXME: kernel not updated to support directions
     @assert directions(dg) == 1:ndims(dg.law)
@@ -203,6 +207,7 @@ function launch_volumeterm(form::FluxDifferencingForm, dq, q, dg; increment, dep
         dependencies = comp_stream
       )
     end
+  else
     error("Unknown kernel type $kernel_type")
   end
 
