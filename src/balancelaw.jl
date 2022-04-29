@@ -1,5 +1,6 @@
 export numberofstates, constants
 export AbstractProblem
+export problem
 
 
 abstract type AbstractBalanceLaw{FT, D, S, C} end
