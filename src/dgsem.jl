@@ -8,9 +8,9 @@ struct WeakForm <: AbstractVolumeForm end
 struct FluxDifferencingForm{VNF, K} <: AbstractVolumeForm
   volume_numericalflux::VNF
   kernel_type::K
-end
-function FluxDifferencingForm(volume_numerical_flux, kernel_type = :per_dir)
-  FluxDifferencingForm(volume_numerical_flux, kernel_type)
+  function FluxDifferencingForm(volume_numerical_flux::VNF, kernel_type::Symbol = :per_dir) where {VNF}
+    new{VNF, Symbol}(volume_numerical_flux, kernel_type)
+  end
 end
 
 struct DGSEM{L, G, A1, A2, A3, A4, VF, SNF, DIR}
@@ -341,7 +341,7 @@ end
   pencil_MJ = @private FT (Nq3,)
 
   l_q = @localmem FT (Nq1, Nq2, Ns)
-  l_aux = @localmem FT (Nq1, Nq2, dim)
+  l_aux = @localmem FT (Nq1, Nq2, Naux)
   l_g = @localmem FT (Nq1, Nq2, min(2, dim), dim)
 
   e = @index(Group, Linear)
