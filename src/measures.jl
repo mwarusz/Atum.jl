@@ -20,5 +20,14 @@ function weightednorm(q, ::Val{Inf}, _, componentwise)
   componentwise ? n : norm(n, Inf)
 end
 
-entropyintegral(dg, q) = sum(dg.MJ .* entropy.(Ref(dg.law), q, dg.auxstate))
-entropyproduct(dg, p, q) = sum(dg.MJ .* dot.(entropyvariables.(Ref(dg.law), p, dg.auxstate), q))
+function entropyintegral(dg, q)
+  η = entropy.(Ref(dg.law), q, dg.auxstate)
+  sum(dg.MJ .* η)
+  #sum(dg.MJ .* entropy.(Ref(dg.law), q, dg.auxstate))
+end
+function entropyproduct(dg, p, q)
+  v = entropyvariables.(Ref(dg.law), p, dg.auxstate)
+  vᵀq = dot.(v, q)
+  sum(dg.MJ .* vᵀq)
+  #sum(dg.MJ .* dot.(entropyvariables.(Ref(dg.law), p, dg.auxstate), q))
+end
